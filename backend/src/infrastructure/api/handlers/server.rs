@@ -14,10 +14,7 @@ pub async fn create_server(State(state): State<AppState>,claims: Claims, Json(pa
             StatusCode::CREATED,
             Json(server)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -27,10 +24,7 @@ pub async fn get_servers(State(state): State<AppState>,claims: Claims) -> impl I
             StatusCode::OK,
             Json(server)
         ).into_response(),
-        Err(e) => (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -40,10 +34,7 @@ pub async fn get_server_by_id(State(state): State<AppState>, claims: Claims, Pat
             StatusCode::OK,
             Json(server)
         ).into_response(),
-        Err(e) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -53,10 +44,7 @@ pub async fn update_server(State(state): State<AppState>, claims:Claims, Path(se
             StatusCode::OK,
             Json(server)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -65,10 +53,7 @@ pub async fn delete_server(State(state): State<AppState>, claims:Claims, Path(se
         Ok(_) => (
             StatusCode::OK
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -77,10 +62,7 @@ pub async fn join_server(State(state): State<AppState>, claims: Claims, Path(ser
         Ok(response) => {
             Json(response).into_response()
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error" : e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -89,10 +71,7 @@ pub async fn leave_server(State(state): State<AppState>, claims: Claims, Path(se
         Ok(_) => (
             StatusCode::OK
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -102,10 +81,7 @@ pub async fn get_servermembers(State(state): State<AppState>, claims: Claims, Pa
             StatusCode::OK,
             Json(members)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -115,10 +91,7 @@ pub async fn update_member(State(state): State<AppState>, claims:Claims, Path((s
             StatusCode::OK,
             Json(response)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -127,10 +100,7 @@ pub async fn create_channel(State(state): State<AppState>, claims: Claims, Path(
         Ok(_) => (
             StatusCode::OK,
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -140,9 +110,24 @@ pub async fn get_channels(State(state): State<AppState>, claims: Claims, Path(se
             StatusCode::OK,
             Json(response)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
+    }
+}
+
+pub async fn kick_user(State(state): State<AppState>, claims: Claims, Path(server_id): Path<i32>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
+    match server_service::kick_user(&state.db, &state.tx, claims, server_id, user_id).await {
+        Ok(response) => (
+            StatusCode::OK
+        ).into_response(),
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
+    }
+}
+
+pub async fn timeout_user(State(state): State<AppState>, claims: Claims, Path(server_id): Path<i32>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
+    match server_service::timeout_user(&state.db, &state.tx, claims, server_id, user_id).await {
+        Ok(response) => (
+            StatusCode::OK
+        ).into_response(),
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
