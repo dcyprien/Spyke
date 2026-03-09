@@ -17,10 +17,7 @@ pub async fn signup(State(state): State<AppState>, Json(payload): Json<SignupReq
         Ok(user) => (StatusCode::CREATED,
             Json(user)
         ).into_response(),
-    Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": e }))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -30,10 +27,7 @@ pub async fn login(State(state): State<AppState>, Json(payload): Json<LoginReque
             StatusCode::OK,
             Json(user)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -43,10 +37,7 @@ pub async fn logout(State(state): State<AppState>, claims: Claims) -> impl IntoR
             StatusCode::OK,
             Json(response)
         ).into_response(),
-        Err(e) => (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -56,10 +47,7 @@ pub async fn me( State(state): State<AppState>, claims: Claims,) -> impl IntoRes
             StatusCode::OK,
             Json(user)
         ).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
