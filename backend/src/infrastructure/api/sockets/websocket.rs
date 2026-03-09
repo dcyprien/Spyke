@@ -136,7 +136,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
                         if let Some(msg_server_id) = maybe_server_id {
                              if user_server_ids.contains(&msg_server_id) {
-                                if let Err(e) = sender.send(Message::Text(msg_string.into())).await {
+                                if let Err(_e) = sender.send(Message::Text(msg_string.into())).await {
                                     // println!("WS: Erreur d'envoi socket: {}", e);
                                     break; 
                                 }

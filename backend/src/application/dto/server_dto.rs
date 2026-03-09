@@ -108,3 +108,8 @@ pub struct CreateChannelRequest {
 pub struct GetChannelsResponse {
     pub channels: Vec<ChannelItem>
 }
+
+#[derive(Debug, Deserialize)]
+pub struct BanUserRequest {
+    pub duration: Option<i32>
+}

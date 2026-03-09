@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "server_members")]
+#[sea_orm(table_name = "server_bans")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
@@ -12,18 +12,9 @@ pub struct Model {
     
     pub user_id: Uuid,
     
-    pub role: MemberRole,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
-pub enum MemberRole {
-    #[sea_orm(string_value = "owner")]
-    Owner,      // 1 seul par serveur (dupliqué depuis server.owner_id pour faciliter les requêtes)
-    #[sea_orm(string_value = "admin")]
-    Admin,      // Plusieurs admins possibles
-    #[sea_orm(string_value = "member")]
-    Member,     // Membres normaux
+    pub banned_by: Uuid,
+    
+    pub banned_until: Option<chrono::NaiveDateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -51,6 +42,7 @@ impl Related<super::server_model::Entity> for Entity {
     }
 }
 
+// Optionnel: Relation vers l'utilisateur (celui qui est banni)
 impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::User.def()

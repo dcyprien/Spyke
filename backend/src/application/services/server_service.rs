@@ -1,8 +1,8 @@
 use crate::application::dto::apperror::AppError;
-use crate::domain::models::{channel, server_member, server_model, user};
+use crate::domain::models::{channel, server_member, server_model, user, server_ban};
 use crate::domain::models::server_member::MemberRole;
 use crate::application::dto::channel_dto::ChannelItem;
-use crate::application::dto::server_dto::{CreateChannelRequest, CreateServerRequest, CreateServerResponse, GetChannelsResponse, GetServerIdResponse, GetServerMemberResponse, GetServerResponse, JoinServerRequest, JoinServerResponse, MemberItem, ServerItem, UpdateMemberRequest, UpdateMemberResponse, UpdateServerRequest, UpdateServerResponse};
+use crate::application::dto::server_dto::{CreateChannelRequest, CreateServerRequest, BanUserRequest, CreateServerResponse, GetChannelsResponse, GetServerIdResponse, GetServerMemberResponse, GetServerResponse, JoinServerRequest, JoinServerResponse, MemberItem, ServerItem, UpdateMemberRequest, UpdateMemberResponse, UpdateServerRequest, UpdateServerResponse};
 use crate::application::dto::token_dto::Claims;
 use axum::http::StatusCode;
 use sea_orm::ActiveValue::Set;
@@ -335,6 +335,28 @@ pub async fn join_server(
         .map_err(|e| AppError::InternalServerError(e.to_string()))?
         .ok_or(AppError::NotFound("Server not found".to_string()))?;
 
+    let ban_record = server_ban::Entity::find()
+        .filter(server_ban::Column::ServerId.eq(server_id))
+        .filter(server_ban::Column::UserId.eq(claims.sub))
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    if let Some(ban) = ban_record {
+        if let Some(banned_until) = ban.banned_until {
+            if banned_until > chrono::Utc::now().naive_utc() {
+                return Err(AppError::Forbidden("You are temporarily banned from this server".to_string()));
+            } else {
+                // Le ban a expiré, on le supprime de la base de données
+                let ban_active: server_ban::ActiveModel = ban.into();
+                let _ = ban_active.delete(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+            }
+        } else {
+            // Ban définitif (banned_until = None)
+            return Err(AppError::Forbidden("You are permanently banned from this server".to_string()));
+        }
+    }
+
     // 2. Vérif déjà membre
     let existing_membership = server_member::Entity::find()
         .filter(server_member::Column::ServerId.eq(server_id))
@@ -451,7 +473,7 @@ pub async fn leave_server(
     server_id: i32
 ) -> Result<StatusCode, AppError> {
     // Vérif server
-    let server = server_model::Entity::find_by_id(server_id)
+    let _server = server_model::Entity::find_by_id(server_id)
         .one(db)
         .await
         .map_err(|e| AppError::InternalServerError(e.to_string()))?
@@ -815,13 +837,13 @@ pub async fn kick_user(
     Ok(StatusCode::OK)
 }
 
-pub async fn timeout_user(
+pub async fn ban_user(
     db: &DatabaseConnection,
     tx: &broadcast::Sender<String>,
     claims: Claims,
     server_id: i32,
     user_id: Uuid,
-    duration_minutes: i64
+    req: BanUserRequest
 ) -> Result<StatusCode, AppError> {
     // 1. Récupérer et vérifier le rôle du demandeur
     let requester_membership = server_member::Entity::find()
@@ -833,7 +855,7 @@ pub async fn timeout_user(
         .ok_or(AppError::Forbidden("Not a member of this server".to_string()))?;
 
     if requester_membership.role != MemberRole::Owner && requester_membership.role != MemberRole::Admin {
-        return Err(AppError::Forbidden("Only Owner or Admin can timeout users".to_string()));
+        return Err(AppError::Forbidden("Only Owner or Admin can ban users".to_string()));
     }
 
     // 2. Vérifier la cible
@@ -842,46 +864,50 @@ pub async fn timeout_user(
         .filter(server_member::Column::UserId.eq(user_id))
         .one(db)
         .await
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?
-        .ok_or(AppError::BadRequest("Target user is not a member of this server".to_string()))?;
-
-    if target_membership.role == MemberRole::Owner {
-        return Err(AppError::Forbidden("Cannot timeout the server owner".to_string()));
-    }
-
-    if requester_membership.role == MemberRole::Admin && target_membership.role == MemberRole::Admin {
-        return Err(AppError::Forbidden("Admins cannot timeout other admins".to_string()));
-    }
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
     if claims.sub == user_id {
-        return Err(AppError::BadRequest("Cannot timeout yourself".to_string()));
+        return Err(AppError::BadRequest("Cannot ban yourself".to_string()));
     }
 
-    // 3. Calculer la fin du timeout et mettre à jour l'utilisateur
-    let timeout_end = chrono::Utc::now().naive_utc() + chrono::Duration::minutes(duration_minutes);
-    let member_id = target_membership.id;
-
-    let mut target_active: server_member::ActiveModel = target_membership.into();
-    
-    // Si la durée envoyée est = 0, on peut considérer que cela annule le timeout
-    if duration_minutes <= 0 {
-        target_active.timeout_until = Set(None);
+    let member_id_str = if let Some(ref target) = target_membership {
+        if target.role == MemberRole::Owner {
+            return Err(AppError::Forbidden("Cannot ban the server owner".to_string()));
+        }
+        if requester_membership.role == MemberRole::Admin && target.role == MemberRole::Admin {
+            return Err(AppError::Forbidden("Admins cannot ban other admins".to_string()));
+        }
+        Some(target.id.clone())
     } else {
-        target_active.timeout_until = Set(Some(timeout_end));
-    }
-    
-    target_active.update(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+        None
+    };
 
-    // --- 4. BROADCAST ---
-    let action_type = if duration_minutes <= 0 { "user_timeout_removed" } else { "user_timeouted" };
+    // 3. Kick l'utilisateur s'il est membre
+    if let Some(target) = target_membership {
+        let target_active: server_member::ActiveModel = target.into();
+        target_active.delete(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    }
+
+    // 4. Ajouter l'utilisateur à la table des bans
+    let banned_until = req.duration.map(|days| chrono::Utc::now().naive_utc() + chrono::Duration::days(days as i64));
     
+    let new_ban = server_ban::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        server_id: Set(server_id),
+        user_id: Set(user_id),
+        banned_by: Set(claims.sub),
+        banned_until: Set(banned_until),
+    };
+    new_ban.insert(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    // --- 5. BROADCAST ---    
     let ws_payload = json!({
-        "type": action_type,
+        "type": "user_banned",
         "data": {
             "server_id": server_id,
             "user_id": user_id,
-            "member_id": member_id,
-            "timeout_until": timeout_end.to_string()
+            "member_id": member_id_str,
+            "banned_until": banned_until.map(|d| d.to_string())
         }
     });
     
