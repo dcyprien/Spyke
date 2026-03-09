@@ -8,7 +8,7 @@ import MembersBar from "../../components/membersbar";
 import Chat from "../../components/chat";
 import { useEffect, useState } from "react";
 
-type UserStatus = "online" | "away" | "offline" | "invisible";
+type UserStatus = "online" | "offline" | "invisible";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState<string>("");

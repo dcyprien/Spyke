@@ -1,15 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { authFetch } from "../lib/authFetch";
 
-type UserStatus = "online" | "away" | "offline" | "invisible";
+type UserStatus = "online" | "offline" | "invisible";
 
-const statusConfig: Record<UserStatus, { label: string; color: string }> = {
-  online: { label: "Online", color: "bg-green" },
-  offline: { label: "Offline", color: "bg-red" },
-  away: { label: "Away", color: "bg-yellow" },
-  invisible: { label: "Invisible", color: "bg-grey-light" },
+// Seulement 2 choix MANUELS : en ligne ou invisible
+// "offline" est géré automatiquement (fermeture / onglet caché)
+const manualOptions: { key: "online" | "invisible"; label: string; color: string }[] = [
+  { key: "online",    label: "En ligne",  color: "bg-green" },
+  { key: "invisible", label: "Invisible", color: "bg-grey-light" },
+];
+
+const dotColor: Record<UserStatus, string> = {
+  online:    "bg-green",
+  offline:   "bg-red",
+  invisible: "bg-grey-light",
 };
 
 type Props = {
@@ -18,26 +25,72 @@ type Props = {
 };
 
 export default function UserControlPanel({ username: initialUsername, onStatusChange }: Props) {
+  // "invisible" = choix manuel persisté ; sinon on bascule online/offline automatiquement
+  const [invisible, setInvisible] = useState(false);
+  // État affiché (calculé)
   const [status, setStatus] = useState<UserStatus>("online");
   const [statusOpen, setStatusOpen] = useState(false);
-
   const [avatar, setAvatar] = useState("/images/user.png");
   const [username, setUsername] = useState<string>(initialUsername || "");
 
+  // Helper : envoie le statut au backend en mode keepalive (fonctionne même à la fermeture)
+  const sendStatus = (newStatus: UserStatus) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) return;
+    fetch("http://localhost:3000/auth/status", {
+      method: "PUT",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+      keepalive: true,
+    }).catch(() => {});
+  };
+
+  const applyStatus = (newStatus: UserStatus) => {
+    setStatus(newStatus);
+    sendStatus(newStatus);
+    if (onStatusChange) onStatusChange(newStatus);
+  };
+
   useEffect(() => {
+    // Récupérer username
     if (!username) {
-      const storedUsername = localStorage.getItem("username");
-      if (storedUsername) {
-        setUsername(storedUsername);
+      const stored = localStorage.getItem("username");
+      if (stored) setUsername(stored);
+    }
+
+    // Restaurer préférence invisible
+    const wasInvisible = localStorage.getItem("userInvisible") === "true";
+    setInvisible(wasInvisible);
+
+    // Au montage : on est connecté → appliquer le bon statut initial
+    const initialStatus: UserStatus = wasInvisible ? "invisible" : "online";
+    applyStatus(initialStatus);
+
+    // --- Gestion automatique online/offline (si pas invisible) ---
+    const handleVisibility = () => {
+      if (localStorage.getItem("userInvisible") === "true") return;
+      if (document.visibilityState === "hidden") {
+        applyStatus("offline");
+      } else {
+        applyStatus("online");
       }
-    }
-    
-    // Restaurer le statut depuis localStorage
-    const storedStatus = localStorage.getItem("userStatus") as UserStatus | null;
-    if (storedStatus) {
-      setStatus(storedStatus);
-    }
-  }, [username]);
+    };
+
+    // Fermeture/rechargement de l'onglet
+    const handlePageHide = () => {
+      if (localStorage.getItem("userInvisible") === "true") return;
+      sendStatus("offline");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
  <div className="
@@ -79,33 +132,34 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
               hover:shadow-md
             "
           >
-            <span className={`w-3 h-3 rounded-full ${statusConfig[status].color}`} />
+            <span className={`w-3 h-3 rounded-full ${dotColor[status]}`} />
           </button>
 
-          {/* Dropdown statut */}
+          {/* Dropdown statut — seulement En ligne / Invisible */}
           {statusOpen && (
             <div
             className="
                 absolute
-                bottom-full   /* place le menu au-dessus du bouton */
-                right-15        /* aligne à droite du bouton */
-                mb-2           /* petit écart entre bouton et menu */
-                w-40
+                bottom-full
+                right-15
+                mb-2
+                w-44
                 bg-grey
                 rounded-xl
                 shadow-lg
                 border border-white/20
-                z-1
+                z-50
                 "
             >
               <ul className="p-2 space-y-1">
-                {(Object.keys(statusConfig) as UserStatus[]).map((key) => (
-                  <li key={key}>
+                {manualOptions.map((opt) => (
+                  <li key={opt.key}>
                     <button
                       onClick={() => {
-                        setStatus(key);
-                        localStorage.setItem("userStatus", key);
-                        if (onStatusChange) onStatusChange(key);
+                        const isNowInvisible = opt.key === "invisible";
+                        setInvisible(isNowInvisible);
+                        localStorage.setItem("userInvisible", String(isNowInvisible));
+                        applyStatus(opt.key);
                         setStatusOpen(false);
                       }}
                       className="
@@ -117,8 +171,8 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
                         transition
                       "
                     >
-                      <span className={`w-3 h-3 rounded-full ${statusConfig[key].color}`} />
-                      {statusConfig[key].label}
+                      <span className={`w-3 h-3 rounded-full ${opt.color}`} />
+                      {opt.label}
                     </button>
                   </li>
                 ))}

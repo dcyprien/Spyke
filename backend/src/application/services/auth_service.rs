@@ -323,3 +323,49 @@ pub async fn me(db: &DatabaseConnection, claims: Claims) -> Result<MeResponse, A
         servers
     })
 }
+
+pub async fn update_user_status(
+    db: &DatabaseConnection,
+    tx: &broadcast::Sender<String>,
+    user_id: Uuid,
+    new_status: UserStatus,
+) -> Result<(), AppError> {
+    let user = user::Entity::find_by_id(user_id)
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::NotFound("User not found".to_string()))?;
+
+    let mut active_user: user::ActiveModel = user.into();
+    active_user.status = Set(new_status.clone());
+    active_user
+        .update(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    let broadcast_status = match new_status {
+        UserStatus::Online => "online",
+        UserStatus::Invisible => "invisible",
+        UserStatus::Offline => "offline",
+    };
+
+    let memberships = server_member::Entity::find()
+        .filter(server_member::Column::UserId.eq(user_id))
+        .all(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    for member in memberships {
+        let payload = json!({
+            "type": "user_status_change",
+            "data": {
+                "server_id": member.server_id,
+                "user_id": user_id,
+                "status": broadcast_status
+            }
+        });
+        let _ = tx.send(payload.to_string());
+    }
+
+    Ok(())
+}

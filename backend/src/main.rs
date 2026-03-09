@@ -53,6 +53,7 @@ async fn main() {
     let protected_routes = Router::new()
     .route("/me", get(auth::me))
     .route("/auth/logout", post(auth::logout))
+    .route("/auth/status", put(auth::update_status))
     .route("/servers", post(server::create_server)
                                             .get(server::get_servers))
     .route("/servers/{id}", get(server::get_server_by_id)

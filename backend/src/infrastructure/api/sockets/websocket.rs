@@ -78,6 +78,27 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         println!("WS: Erreur update status online: {}", e);
     }
 
+    // Broadcast Online pour tous les serveurs de l'utilisateur
+    {
+        let memberships = server_member::Entity::find()
+            .filter(server_member::Column::UserId.eq(user_id))
+            .all(state.db.as_ref())
+            .await;
+        if let Ok(members) = memberships {
+            for m in members {
+                let msg = serde_json::json!({
+                    "type": "user_status_change",
+                    "data": {
+                        "server_id": m.server_id,
+                        "user_id": user_id,
+                        "status": "online"
+                    }
+                });
+                let _ = state.tx.send(msg.to_string());
+            }
+        }
+    }
+
     // --- PHASE 2 : LOGIQUE METIER ---
 
     // 1. Chargement initial des serveurs
@@ -98,20 +119,6 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let tx = state.tx.clone();
     let username_for_recv = current_username.clone();
     let mut rx = state.tx.subscribe();
-
-    // --- BROADCAST CONNEXION ---
-    // On notifie chaque serveur que l'utilisateur est connecté
-    for srv_id in &user_server_ids {
-        let msg = json!({
-            "type": "user_status_change",
-            "data": {
-                "server_id": srv_id,
-                "user_id": user_id,
-                "status": "Online"
-            }
-        });
-        let _ = tx.send(msg.to_string());
-    }
 
     // Tâche d'envoi (Broadcast -> WebSocket)
     let mut send_task = tokio::spawn(async move {
@@ -209,7 +216,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 "data": {
                     "server_id": member.server_id,
                     "user_id": user_id,
-                    "status": "Offline"
+                    "status": "offline"
                 }
             });
             let _ = state.tx.send(msg.to_string());
