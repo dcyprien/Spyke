@@ -1,7 +1,12 @@
 .env
 /backend/target/
-target/
-doc.txt
-node_modules/
-.next/
-dist/
+# Ignorer les fichiers Rust compilés
+*.rs.bk
+*.rlib
+*.rmeta
+*.lock
+
+# Ignorer les fichiers temporaires
+*.tmp
+*.swp
+*.bak
