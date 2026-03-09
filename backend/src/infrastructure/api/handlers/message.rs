@@ -1,0 +1,57 @@
+use axum::{Json, http::StatusCode, response::IntoResponse, extract::{State, Path}};
+use crate::{AppState, application::{dto::message_dto::{SendMessageRequest, UpdateMessageRequest}, services::message_service}};
+use uuid::Uuid;
+use sea_orm::{EntityTrait}; 
+use crate::application::dto::token_dto::Claims;
+use crate::domain::models::message;
+use serde_json::json;
+
+pub async fn send_message(State(state): State<AppState>, claims: Claims, Path(channel_id): Path<Uuid>, Json(payload): Json<SendMessageRequest>) -> impl IntoResponse {
+    match message_service::send_message(&state.db, &state.tx, claims.clone(), channel_id, payload.clone()).await {
+        Ok(_) => {
+            StatusCode::CREATED.into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response()
+    }
+}
+
+pub async fn get_messages(State(state): State<AppState>, claims: Claims, Path(channel_id): Path<Uuid>) -> impl IntoResponse {
+    match message_service::get_messages(&state.db, claims, channel_id).await {
+        Ok(list) => (
+            StatusCode::OK,
+            Json(list)
+        ).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": e}))
+        ).into_response()
+    }
+}
+
+pub async fn delete_message(State(state): State<AppState>, claims: Claims, Path(message_id): Path<Uuid>) -> impl IntoResponse {
+    let _message_opt = message::Entity::find_by_id(message_id)
+        .one(&*state.db) 
+        .await
+        .ok()
+        .flatten();
+        
+    match message_service::delete_message(&state.db,  &state.tx, claims, message_id).await {
+        Ok(_) => {
+            StatusCode::OK.into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response()
+    }
+}
+
+pub async fn update_message(State(state): State<AppState>, claims: Claims, Path(message_id): Path<Uuid>, Json(payload): Json<UpdateMessageRequest>) -> impl IntoResponse {
+    match message_service::update_message(&state.db, &state.tx, claims, message_id, payload).await {
+        Ok(response) => (
+            StatusCode::OK,
+            Json(response)
+        ).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": e}))
+        ).into_response()
+    }
+}

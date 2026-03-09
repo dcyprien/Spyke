@@ -1,0 +1,4 @@
+.env
+/backend/target/
+./target
+doc.txt
