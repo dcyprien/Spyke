@@ -10,11 +10,7 @@ pub async fn signup(State(state): State<AppState>, Json(payload): Json<SignupReq
         Ok(user) => (StatusCode::CREATED,
             Json(user)
         ).into_response(),
-    Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": e }))
-        ).into_response()
-    }
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
 }
 
 pub async fn login(State(state): State<AppState>, Json(payload): Json<LoginRequest>) -> impl IntoResponse {
@@ -23,10 +19,7 @@ pub async fn login(State(state): State<AppState>, Json(payload): Json<LoginReque
             StatusCode::OK,
             Json(user)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
