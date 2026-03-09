@@ -6,6 +6,7 @@ mod m20220101_000003_create_table_message;
 mod m20260128_145213_create_refresh_tokens;
 mod m20260129_084245_create_servers;
 mod m20260129_092557_create_server_member;
+mod m20260309_143110_create_server_bans;
 
 pub struct Migrator;
 
@@ -19,6 +20,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20220101_000003_create_table_message::Migration),
             Box::new(m20260128_145213_create_refresh_tokens::Migration),
             Box::new(m20260129_092557_create_server_member::Migration),
+            Box::new(m20260309_143110_create_server_bans::Migration),
         ]
     }
 }

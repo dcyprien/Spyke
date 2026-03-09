@@ -2,7 +2,7 @@ use axum::{debug_handler,Json, http::StatusCode, response::IntoResponse, extract
 use crate::{AppState, application::dto::server_dto::{CreateChannelRequest, JoinServerRequest, UpdateMemberRequest, UpdateServerRequest}};
 use uuid::Uuid;
 use crate::application::services::server_service;
-use crate::application::dto::server_dto::{CreateServerRequest};
+use crate::application::dto::server_dto::{CreateServerRequest, BanUserRequest};
 use crate::application::dto::token_dto::Claims;
 use serde_json::json;
 
@@ -116,16 +116,16 @@ pub async fn get_channels(State(state): State<AppState>, claims: Claims, Path(se
 
 pub async fn kick_user(State(state): State<AppState>, claims: Claims, Path(server_id): Path<i32>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
     match server_service::kick_user(&state.db, &state.tx, claims, server_id, user_id).await {
-        Ok(response) => (
+        Ok(_response) => (
             StatusCode::OK
         ).into_response(),
         Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
-pub async fn timeout_user(State(state): State<AppState>, claims: Claims, Path(server_id): Path<i32>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
-    match server_service::timeout_user(&state.db, &state.tx, claims, server_id, user_id).await {
-        Ok(response) => (
+pub async fn ban_user(State(state): State<AppState>, claims: Claims, Path((server_id, user_id)): Path<(i32, Uuid)>, Json(payload): Json<BanUserRequest>) -> impl IntoResponse {
+    match server_service::ban_user(&state.db, &state.tx, claims, server_id, user_id, payload).await {
+        Ok(_response) => (
             StatusCode::OK
         ).into_response(),
         Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
