@@ -1,4 +1,7 @@
 .env
 /backend/target/
-./target
+target/
 doc.txt
+node_modules/
+.next/
+dist/
