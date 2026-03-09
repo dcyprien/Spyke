@@ -9,10 +9,7 @@ pub async fn get_channel_by_id(State(state): State<AppState>, claims: Claims, Pa
             StatusCode::OK,
             Json(response)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -23,10 +20,7 @@ pub async fn update_channel(State(state): State<AppState>, claims: Claims, Path(
             StatusCode::OK,
             Json(response)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -35,10 +29,7 @@ pub async fn delete_channel(State(state): State<AppState>, claims: Claims, Path(
         Ok(_) => (
             StatusCode::OK
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
