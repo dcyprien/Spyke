@@ -11,7 +11,7 @@ pub async fn send_message(State(state): State<AppState>, claims: Claims, Path(ch
         Ok(_) => {
             StatusCode::CREATED.into_response()
         },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -21,10 +21,7 @@ pub async fn get_messages(State(state): State<AppState>, claims: Claims, Path(ch
             StatusCode::OK,
             Json(list)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -39,7 +36,7 @@ pub async fn delete_message(State(state): State<AppState>, claims: Claims, Path(
         Ok(_) => {
             StatusCode::OK.into_response()
         }
-        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
 
@@ -49,9 +46,6 @@ pub async fn update_message(State(state): State<AppState>, claims: Claims, Path(
             StatusCode::OK,
             Json(response)
         ).into_response(),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e}))
-        ).into_response()
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }

@@ -753,3 +753,139 @@ pub async fn get_channels(db: &DatabaseConnection, claims: Claims, server_id: i3
 
     Ok(GetChannelsResponse { channels: channel_items })
 }
+
+pub async fn kick_user(
+    db: &DatabaseConnection,
+    tx: &broadcast::Sender<String>,
+    claims: Claims,
+    server_id: i32,
+    user_id: Uuid
+) -> Result<StatusCode, AppError> {
+    // 1. Récupérer et vérifier le rôle du demandeur
+    let requester_membership = server_member::Entity::find()
+        .filter(server_member::Column::ServerId.eq(server_id))
+        .filter(server_member::Column::UserId.eq(claims.sub))
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::Forbidden("Not a member of this server".to_string()))?;
+
+    if requester_membership.role != MemberRole::Owner && requester_membership.role != MemberRole::Admin {
+        return Err(AppError::Forbidden("Only Owner or Admin can kick users".to_string()));
+    }
+
+    // 2. Vérifier la cible du kick
+    let target_membership = server_member::Entity::find()
+        .filter(server_member::Column::ServerId.eq(server_id))
+        .filter(server_member::Column::UserId.eq(user_id))
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::BadRequest("Target user is not a member of this server".to_string()))?;
+
+    if target_membership.role == MemberRole::Owner {
+        return Err(AppError::Forbidden("Cannot kick the server owner".to_string()));
+    }
+
+    if requester_membership.role == MemberRole::Admin && target_membership.role == MemberRole::Admin {
+        return Err(AppError::Forbidden("Admins cannot kick other admins".to_string()));
+    }
+
+    if claims.sub == user_id {
+        return Err(AppError::BadRequest("Cannot kick yourself. Use leave instead".to_string()));
+    }
+
+    let member_id = target_membership.id;
+
+    // 3. Supprimer le membre
+    let target_active: server_member::ActiveModel = target_membership.into();
+    target_active.delete(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    // --- 4. BROADCAST ---
+    let ws_payload = json!({
+        "type": "user_kicked",
+        "data": {
+            "server_id": server_id,
+            "user_id": user_id,
+            "member_id": member_id
+        }
+    });
+    let _ = tx.send(ws_payload.to_string());
+
+    Ok(StatusCode::OK)
+}
+
+pub async fn timeout_user(
+    db: &DatabaseConnection,
+    tx: &broadcast::Sender<String>,
+    claims: Claims,
+    server_id: i32,
+    user_id: Uuid,
+    duration_minutes: i64
+) -> Result<StatusCode, AppError> {
+    // 1. Récupérer et vérifier le rôle du demandeur
+    let requester_membership = server_member::Entity::find()
+        .filter(server_member::Column::ServerId.eq(server_id))
+        .filter(server_member::Column::UserId.eq(claims.sub))
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::Forbidden("Not a member of this server".to_string()))?;
+
+    if requester_membership.role != MemberRole::Owner && requester_membership.role != MemberRole::Admin {
+        return Err(AppError::Forbidden("Only Owner or Admin can timeout users".to_string()));
+    }
+
+    // 2. Vérifier la cible
+    let target_membership = server_member::Entity::find()
+        .filter(server_member::Column::ServerId.eq(server_id))
+        .filter(server_member::Column::UserId.eq(user_id))
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::BadRequest("Target user is not a member of this server".to_string()))?;
+
+    if target_membership.role == MemberRole::Owner {
+        return Err(AppError::Forbidden("Cannot timeout the server owner".to_string()));
+    }
+
+    if requester_membership.role == MemberRole::Admin && target_membership.role == MemberRole::Admin {
+        return Err(AppError::Forbidden("Admins cannot timeout other admins".to_string()));
+    }
+
+    if claims.sub == user_id {
+        return Err(AppError::BadRequest("Cannot timeout yourself".to_string()));
+    }
+
+    // 3. Calculer la fin du timeout et mettre à jour l'utilisateur
+    let timeout_end = chrono::Utc::now().naive_utc() + chrono::Duration::minutes(duration_minutes);
+    let member_id = target_membership.id;
+
+    let mut target_active: server_member::ActiveModel = target_membership.into();
+    
+    // Si la durée envoyée est = 0, on peut considérer que cela annule le timeout
+    if duration_minutes <= 0 {
+        target_active.timeout_until = Set(None);
+    } else {
+        target_active.timeout_until = Set(Some(timeout_end));
+    }
+    
+    target_active.update(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    // --- 4. BROADCAST ---
+    let action_type = if duration_minutes <= 0 { "user_timeout_removed" } else { "user_timeouted" };
+    
+    let ws_payload = json!({
+        "type": action_type,
+        "data": {
+            "server_id": server_id,
+            "user_id": user_id,
+            "member_id": member_id,
+            "timeout_until": timeout_end.to_string()
+        }
+    });
+    
+    let _ = tx.send(ws_payload.to_string());
+
+    Ok(StatusCode::OK)
+}

@@ -62,6 +62,8 @@ async fn main() {
     .route("/servers/{id}/leave", delete(server::leave_server))
     .route("/servers/{id}/members", get(server::get_servermembers))
     .route("/servers/{server_id}/members/{userid}", put(server::update_member))
+    .route("/servers/{server_id}/kick/{userid}", put(server::kick_user))
+    .route("/servers/{server_id}/timeout/{userid}", put(server::timeout_user))
     .route("/servers/{id}/channels", post(server::create_channel)
                                                         .get(server::get_channels))
     .route("/channels/{id}", get(channel::get_channel_by_id)

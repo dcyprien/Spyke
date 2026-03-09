@@ -13,7 +13,8 @@ pub struct Model {
     pub user_id: Uuid,
     
     pub role: MemberRole,
-    
+
+    pub timeout_until: Option<chrono::NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
