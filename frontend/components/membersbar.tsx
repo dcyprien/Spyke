@@ -23,9 +23,11 @@ interface ServerWithMembers {
 
 interface Props {
   selectedServer?: ServerWithMembers | null;
+  userStatus?: string;
+  selectedChannel?: any;
 }
 
-export default function MembersBar({ selectedServer }: Props) {
+export default function MembersBar({ selectedServer, userStatus }: Props) {
   // On récupère 'servers' pour toujours avoir les données à jour (fix du problème d'affichage)
   const { user, servers, refreshUserData } = useAuth(); // AJOUT DE refreshUserData
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -36,13 +38,13 @@ export default function MembersBar({ selectedServer }: Props) {
     Member: "text-gray-400",
   };
 
-  const statusColors: Record<string, string> = {
-    // Minuscules (cas par défaut)
-    online: "#22c55e", 
-    Online: "#22c55e",
-    // Majuscules (venant de la DB Rust Enum)
-    offline: "#6b7280",
-    Offline: "#6b7280",
+  const statusColor = (status?: string) => {
+    switch ((status || "").toLowerCase()) {
+      case "online":    return "#22c55e"; // vert
+      case "offline":   return "#ef4444"; // rouge
+      case "invisible": return "#6b7280"; // gris (paraît hors-ligne pour les autres)
+      default: return "#6b7280";
+    }
   };
 
   // 1. Récupérer le "vrai" serveur depuis le contexte pour éviter d'avoir des données obsolètes
@@ -134,15 +136,14 @@ export default function MembersBar({ selectedServer }: Props) {
           <div className="text-gray-500 text-center text-sm italic mt-10">Sélectionnez un serveur</div>
         ) : (
             filteredMembers.map((member) => {
-                const statusHex = statusColors[member.status || "Offline"] || "#6b7280";
                 const isMe = user ? String(user.id) === member.user_id : false;
+                const statusHex = isMe && userStatus ? statusColor(userStatus) : statusColor(member.status);
                 
                 const canManage = user && !isMe && (
                     (currentUserRole === "Owner") || 
                     (currentUserRole === "Admin" && member.role === "Member")
                 );
                 
-            const statusClass = statusColors[member.status || "Offline"] || "bg-gray-500";
             return (
               <div 
                 key={member.id} 
@@ -151,7 +152,7 @@ export default function MembersBar({ selectedServer }: Props) {
               >
                 <div className="relative flex-shrink-0">
                   <Image 
-                    src={"/images/user.png"} 
+                    src={member.avatar_url || "/default-avatar.png"} 
                     alt={member.username} 
                     width={32} height={32} 
                     className="rounded-full bg-gray-700" 

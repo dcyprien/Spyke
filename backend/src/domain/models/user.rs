@@ -23,12 +23,15 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(20))")]
 pub enum UserStatus {
     #[sea_orm(string_value = "online")]
     Online,
     #[sea_orm(string_value = "offline")]
     Offline,
+    #[sea_orm(string_value = "invisible")]
+    Invisible,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
