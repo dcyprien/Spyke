@@ -137,9 +137,8 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 setActionError(err.error || "Erreur lors de l'expulsion.");
-            } else {
-                await refreshUserData();
             }
+            // La mise à jour de la liste est gérée par l'événement WebSocket "user_banned"
             return;
         }
 
@@ -153,9 +152,8 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 setActionError(err.error || "Erreur lors du ban permanent.");
-            } else {
-                await refreshUserData();
             }
+            // La mise à jour de la liste est gérée par l'événement WebSocket "user_banned"
             return;
         }
     } catch (e) {
@@ -189,7 +187,7 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
             setBanModal(null);
             setBanValue("30");
             setBanUnit("minutes");
-            await refreshUserData();
+            // La mise à jour de la liste est gérée par l'événement WebSocket "user_banned"
         }
     } catch (e) {
         setBanError("Erreur réseau.");
