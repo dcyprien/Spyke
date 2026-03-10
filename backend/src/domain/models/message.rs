@@ -13,12 +13,13 @@ pub struct Model {
 
     pub user_id: Uuid,
 
-    pub server_id: i32,
+    pub server_id: Option<i32>,
 
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
+
+    pub direct_message: Option<Uuid>,
 
     pub created_at: DateTimeUtc,
-    
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

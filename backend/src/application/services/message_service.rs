@@ -4,7 +4,7 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, Mo
 use uuid::Uuid;
 use tokio::sync::broadcast;
 use serde_json::json;
-use crate::{application::dto::{apperror::AppError, message_dto::{GetMessagesResponse, MessageItem, SendMessageRequest, UpdateMessageRequest, UpdateMessageResponse}, token_dto::Claims}, domain::models::{channel, message, server_member::{self, MemberRole}, user}};
+use crate::{application::dto::{apperror::AppError, message_dto::{GetMessagesResponse, MessageItem, SendMessageRequest, UpdateMessageRequest, UpdateMessageResponse}, token_dto::Claims}, domain::models::{channel, message, server_member::{self, MemberRole}, user, direct_message}};
 
 // 1. ADAPTATION DE SEND_MESSAGE
 pub async fn send_message(
@@ -15,6 +15,8 @@ pub async fn send_message(
     req: SendMessageRequest
 ) -> Result<MessageItem, AppError> { // Retourne MessageItem complet
 
+    let req_server_id = req.server_id.ok_or(AppError::BadRequest("server_id is required for channel messages".to_string()))?;
+
     // 1. Vérifications existantes
     let channel = channel::Entity::find_by_id(channel_id)
         .one(db)
@@ -22,7 +24,7 @@ pub async fn send_message(
         .map_err(|e| AppError::InternalServerError(e.to_string()))?
         .ok_or(AppError::NotFound("Channel not found".to_string()))?;
 
-    if channel.server_id != req.server_id { return Err(AppError::BadRequest("Channel error".to_string())); }
+    if channel.server_id != req_server_id { return Err(AppError::BadRequest("Channel error".to_string())); }
 
     let _membership = server_member::Entity::find()
         .filter(server_member::Column::ServerId.eq(req.server_id))
@@ -37,10 +39,11 @@ pub async fn send_message(
     // 2. Insertion DB
     let new_message = message::ActiveModel {
         id: Set(Uuid::new_v4()),
-        channel_id: Set(channel_id),
-        server_id: Set(req.server_id),
+        channel_id: Set(Some(channel_id)),
+        server_id: Set(Some(req_server_id)),
         user_id: Set(claims.sub), 
         content: Set(req.content.clone()),
+        direct_message: Set(req.direct_message),
         created_at: Set(Utc::now()), 
         ..Default::default()
     };
@@ -78,6 +81,65 @@ pub async fn send_message(
         author: user_info.username, // ✅ Ajout ici
         server_id: saved_msg.server_id,
         channel_id: saved_msg.channel_id,
+        direct_message_id: saved_msg.direct_message, // ✅ Ajout du DM
+        created_at: saved_msg.created_at.into(),
+    })
+}
+
+pub async fn send_dm(
+    db: &DatabaseConnection, 
+    tx: &broadcast::Sender<String>, 
+    claims: Claims, 
+    dm_id: Uuid, 
+    req: SendMessageRequest
+) -> Result<MessageItem, AppError> {
+
+    if req.content.trim().is_empty() { return Err(AppError::BadRequest("Empty content".to_string())); }
+
+    // 1. Insertion DB (Sans server ni channel, mais avec direct_message)
+    let new_message = message::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        channel_id: Set(None),
+        server_id: Set(None),
+        user_id: Set(claims.sub), 
+        content: Set(req.content.clone()),
+        direct_message: Set(Some(dm_id)),
+        created_at: Set(Utc::now()), 
+        ..Default::default()
+    };
+
+    let saved_msg = new_message.insert(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    // 2. Récupération infos User
+    let user_info = user::Entity::find_by_id(claims.sub)
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::InternalServerError("User not found".to_string()))?;
+
+    // 3. BROADCAST VIA WEBSOCKET
+    let ws_payload = json!({
+        "type": "new_dm_message",
+        "data": {
+            "id": saved_msg.id.to_string(),
+            "content": saved_msg.content,
+            "user_id": saved_msg.user_id.to_string(),
+            "author_username": user_info.username.clone(),
+            "direct_message_id": dm_id.to_string(),
+            "created_at": saved_msg.created_at.to_string()
+        }
+    });
+    let _ = tx.send(ws_payload.to_string());
+
+    // 4. Retour HTTP
+    Ok(MessageItem {
+        id: saved_msg.id,
+        content: saved_msg.content,
+        user_id: saved_msg.user_id,
+        author: user_info.username,
+        server_id: None,
+        channel_id: None,
+        direct_message_id: Some(dm_id),
         created_at: saved_msg.created_at.into(),
     })
 }
@@ -123,6 +185,7 @@ pub async fn get_messages(db: &DatabaseConnection, claims: Claims, channel_id: U
             author: author_name,
             server_id: msg.server_id,
             channel_id: msg.channel_id,
+            direct_message_id: msg.direct_message,
             created_at: msg.created_at.into(), 
         }
     }).collect();
@@ -148,14 +211,15 @@ pub async fn delete_message(
     // On stocke les IDs pour le broadcast avant de supprimer
     let server_id = message_model.server_id;
     let channel_id = message_model.channel_id;
+    let direct_message_id = message_model.direct_message;
 
     // Logique de permission (inchangée)
     // Cas simple : L'utilisateur est l'auteur
     let authorized = if message_model.user_id == claims.sub {
         true
-    } else {
+    } else if let Some(c_id) = channel_id {
         // Cas admin/owner    
-        let channel_model = channel::Entity::find_by_id(channel_id)
+        let channel_model = channel::Entity::find_by_id(c_id)
             .one(db)
             .await
             .map_err(|e| AppError::InternalServerError(e.to_string()))?
@@ -170,6 +234,8 @@ pub async fn delete_message(
             .ok_or(AppError::Forbidden("Not a member".to_string()))?;
 
         membership.role == MemberRole::Admin || membership.role == MemberRole::Owner
+    } else {
+        false
     };
 
     if authorized {
@@ -181,8 +247,9 @@ pub async fn delete_message(
             "type": "DELETE_MESSAGE",
             "data": {
                 // On convertit en String pour éviter les conflits de type Int/String dans websocket.rs
-                "server_id": server_id.to_string(), 
-                "channel_id": channel_id.to_string(),
+                "server_id": server_id.map(|id| id.to_string()), 
+                "channel_id": channel_id.map(|id| id.to_string()),
+                "direct_message": direct_message_id.map(|id| id.to_string()),
                 "message_id": message_id.to_string()
             }
         });
@@ -241,8 +308,9 @@ pub async fn update_message(
         "type": "UPDATE_MESSAGE",
         "data": {
             // Conversion en String importante pour le routage WS
-            "server_id": updated_msg.server_id,
-            "channel_id": updated_msg.channel_id.to_string(),
+            "server_id": updated_msg.server_id.map(|id| id.to_string()),
+            "channel_id": updated_msg.channel_id.map(|id| id.to_string()),
+            "direct_message": updated_msg.direct_message.map(|id| id.to_string()),
             "message_id": updated_msg.id.to_string(),
             "new_content": updated_msg.content
         }
@@ -260,7 +328,53 @@ pub async fn update_message(
             author: author_user.username,
             channel_id: updated_msg.channel_id,
             server_id: updated_msg.server_id,
+            direct_message_id: updated_msg.direct_message,
             created_at: updated_msg.created_at.into()
         }
     })
+}
+
+pub async fn get_direct_messages(db: &DatabaseConnection, claims: Claims, dm_id: Uuid) -> Result<GetMessagesResponse, AppError> {
+    
+    // 1. Vérification que la room ("direct_message") existe et que l'utilisateur y a accès
+    let dm_room = crate::domain::models::direct_message::Entity::find_by_id(dm_id)
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::NotFound("Direct message conversation not found".to_string()))?;
+
+    // Seulement le sender ou le receiver peuvent lire cette conversation
+    if dm_room.sender_id != claims.sub && dm_room.receiver_id != claims.sub {
+        return Err(AppError::Forbidden("You are not part of this conversation".to_string()));
+    }
+
+    // 2. Récupérer les messages liés à cet ID de DM
+    let messages = message::Entity::find()
+        .filter(message::Column::DirectMessage.eq(Some(dm_id)))
+        .order_by_asc(message::Column::CreatedAt)
+        .find_also_related(user::Entity) // ✅ JOIN USER pour le nom
+        .all(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    // 3. Formater la réponse
+    let message_list = messages.into_iter().map(|(msg, user_opt)| {
+        let author_name = match user_opt {
+            Some(u) => u.username,
+            None => "Utilisateur Inconnu".to_string()
+        };
+
+        MessageItem {
+            id: msg.id,
+            content: msg.content,
+            user_id: msg.user_id,
+            author: author_name,
+            server_id: msg.server_id,
+            channel_id: msg.channel_id,
+            direct_message_id: msg.direct_message,
+            created_at: msg.created_at.into(), 
+        }
+    }).collect();
+
+    Ok(GetMessagesResponse { message_list })
 }

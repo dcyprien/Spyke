@@ -63,5 +63,5 @@ enum Users {
     PasswordHash,
     DisplayName,
     AvatarUrl,
-    Status,
+    Status
 }
