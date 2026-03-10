@@ -5,3 +5,4 @@ pub mod server_model;
 pub mod server_member;
 pub mod channel;
 pub mod server_ban;
+pub mod direct_message;

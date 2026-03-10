@@ -5,7 +5,8 @@ use uuid::Uuid;
 #[derive(Debug, Deserialize, Clone)]
 pub struct SendMessageRequest {
     pub content: String,
-    pub server_id: i32,
+    pub server_id: Option<i32>,
+    pub direct_message: Option<Uuid>
 }
 
 #[derive(Debug, Serialize)]
@@ -14,8 +15,9 @@ pub struct MessageItem {
     pub content: String,
     pub user_id: Uuid,
     pub author: String,
-    pub channel_id: Uuid,
-    pub server_id: i32,
+    pub channel_id: Option<Uuid>,
+    pub direct_message_id: Option<Uuid>,
+    pub server_id: Option<i32>,
     pub created_at: DateTimeUtc
 }
 
