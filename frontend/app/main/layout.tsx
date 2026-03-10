@@ -8,6 +8,7 @@ import MembersBar from "../../components/membersbar";
 import Chat from "../../components/chat";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context";
+import { useLang } from "../langContext";
 
 type UserStatus = "online" | "offline" | "invisible";
 
@@ -15,6 +16,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [username, setUsername] = useState<string>("");
   const [userStatus, setUserStatus] = useState<UserStatus>("online");
   const { banNotifications, dismissBanNotification, setServers } = useAuth();
+  const { t } = useLang();
   
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
@@ -65,13 +67,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <div className="text-4xl mb-4">
                 {notif.message.startsWith("❌") ? "🔨" : notif.message.startsWith("⏳") ? "⏳" : "🚪"}
               </div>
-              <p className="text-white font-semibold text-lg mb-2">Action du serveur</p>
+              <p className="text-white font-semibold text-lg mb-2">{t.layout_ban_title}</p>
               <p className="text-gray-300 text-sm mb-6">{notif.message}</p>
               <button
                 onClick={dismissBanNotification}
                 className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold transition"
               >
-                OK
+                {t.layout_ban_ok}
               </button>
             </div>
           </div>

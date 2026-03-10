@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLang } from "../app/langContext";
 
 type Props = {
   switchToLogin: () => void;
@@ -13,25 +14,26 @@ export default function RegisterForm({ switchToLogin }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const { t } = useLang();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate password match
     if (password !== confirmPassword) {
-      alert("Passwords do not match");
+      alert(t.register_pw_mismatch);
       return;
     }
     
     // Validate password length
     if (password.length < 8) {
-      alert("Password must be at least 8 characters");
+      alert(t.register_pw_short);
       return;
     }
     
     // Validate username
     if (!username.trim()) {
-      alert("Username is required");
+      alert(t.register_username_required);
       return;
     }
     
@@ -51,11 +53,11 @@ export default function RegisterForm({ switchToLogin }: Props) {
         return res.json();
       })
       .then((data) => {
-        alert("Inscription réussie. Vous pouvez maintenant vous connecter.");
+        alert(t.register_success);
         switchToLogin();
       })
       .catch((err) => {
-        alert("Erreur d'inscription: " + err.message);
+        alert(t.register_error + err.message);
       });
   };
 
@@ -64,14 +66,14 @@ export default function RegisterForm({ switchToLogin }: Props) {
   return (
     <div className="max-w-md mx-auto p-6 bg-white dark:bg-[#1E1E2E] rounded-lg shadow-lg">
       <h1 className="text-2xl font-bold text-center text-heading dark:text-white mb-6">
-        Register
+        {t.register_title}
       </h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Username */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Username
+            {t.register_username}
           </label>
           <input
             type="text"
@@ -85,7 +87,7 @@ export default function RegisterForm({ switchToLogin }: Props) {
         {/* Password */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password
+            {t.register_password}
           </label>
           <input
             type="password"
@@ -99,7 +101,7 @@ export default function RegisterForm({ switchToLogin }: Props) {
         {/* Confirm Password */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Confirm Password
+            {t.register_confirm_password}
           </label>
           <input
             type="password"
@@ -115,18 +117,18 @@ export default function RegisterForm({ switchToLogin }: Props) {
           type="submit"
           className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition"
         >
-          Register
+          {t.register_submit}
         </button>
       </form>
 
       {/* Footer */}
       <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-        Already have an account?{" "}
+        {t.register_already}{" "}
         <button
           onClick={switchToLogin}
           className="text-blue-600 dark:text-cyan-400 underline"
         >
-          Log in
+          {t.register_login_link}
         </button>
       </p>
     </div>
