@@ -31,6 +31,11 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
   // On récupère 'servers' pour toujours avoir les données à jour (fix du problème d'affichage)
   const { user, servers, refreshUserData } = useAuth(); // AJOUT DE refreshUserData
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [banModal, setBanModal] = useState<{ userId: string; displayName: string } | null>(null);
+  const [banValue, setBanValue] = useState("30");
+  const [banUnit, setBanUnit] = useState<"minutes" | "heures" | "jours">("minutes");
+  const [banError, setBanError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const roleColors: Record<string, string> = {
     Owner: "text-red-500",
@@ -116,17 +121,125 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
             });
 
             if (res.ok) {
-                await refreshUserData(); // Mise à jour immédiate pour l'admin qui clique
+                await refreshUserData();
             }
+            return;
+        }
+
+        if (action === "kick") {
+            if (!window.confirm("Expulser ce membre du serveur ? Il pourra rejoindre après 10 secondes.")) return;
+            // Expulsion = ban de 10 secondes
+            const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${targetUserId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ duration: 10 })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setActionError(err.error || "Erreur lors de l'expulsion.");
+            } else {
+                await refreshUserData();
+            }
+            return;
+        }
+
+        if (action === "permban") {
+            if (!window.confirm("Bannir définitivement ce membre ? Il ne pourra plus jamais rejoindre ce serveur.")) return;
+            const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${targetUserId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ duration: null })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setActionError(err.error || "Erreur lors du ban permanent.");
+            } else {
+                await refreshUserData();
+            }
+            return;
         }
     } catch (e) {
         console.error(e);
+        setActionError("Erreur réseau.");
     }
 };
+
+  const handleConfirmTempBan = async () => {
+    if (!banModal || !activeServer) return;
+    setBanError("");
+    const val = parseInt(banValue, 10);
+    if (isNaN(val) || val <= 0) {
+        setBanError("Veuillez entrer une valeur valide (nombre entier positif).");
+        return;
+    }
+    // duration envoyée en secondes au backend
+    const multipliers: Record<"minutes" | "heures" | "jours", number> = { minutes: 60, heures: 3600, jours: 86400 };
+    const durationSeconds = val * multipliers[banUnit as "minutes" | "heures" | "jours"];
+    const token = localStorage.getItem("access_token");
+    try {
+        const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${banModal.userId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ duration: durationSeconds })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            setBanError(err.error || "Erreur lors du ban temporaire.");
+        } else {
+            setBanModal(null);
+            setBanValue("30");
+            setBanUnit("minutes");
+            await refreshUserData();
+        }
+    } catch (e) {
+        setBanError("Erreur réseau.");
+    }
+  };
 
 
   return (
     <div className="fixed top-16 right-0 h-[calc(100vh-4rem)] w-64 bg-[#001839] border-l border-[#3D3D3D] flex flex-col p-4 z-10 shadow-lg">
+
+      {/* Modal ban temporaire */}
+      {banModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setBanModal(null)}>
+          <div className="bg-[#181825] border border-[#3D3D3D] rounded-xl p-6 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-bold text-base mb-1">⏳ Ban temporaire</h3>
+            <p className="text-gray-400 text-sm mb-4">Bannir <span className="text-orange-400 font-semibold">{banModal.displayName}</span> pour :</p>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="number"
+                min="1"
+                value={banValue}
+                onChange={e => setBanValue(e.target.value)}
+                className="w-20 bg-[#11111b] border border-[#3D3D3D] rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-orange-500"
+              />
+              <select
+                value={banUnit}
+                onChange={e => setBanUnit(e.target.value as any)}
+                className="flex-1 bg-[#11111b] border border-[#3D3D3D] rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-orange-500"
+              >
+                <option value="minutes">Minute(s)</option>
+                <option value="heures">Heure(s)</option>
+                <option value="jours">Jour(s)</option>
+              </select>
+            </div>
+            {banError && <p className="text-red-400 text-xs mb-3">{banError}</p>}
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => setBanModal(null)} className="flex-1 px-3 py-2 rounded bg-[#11111b] text-gray-400 hover:text-white text-sm transition">Annuler</button>
+              <button onClick={handleConfirmTempBan} className="flex-1 px-3 py-2 rounded bg-orange-600 hover:bg-orange-500 text-white font-semibold text-sm transition">Confirmer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast erreur action */}
+      {actionError && (
+        <div className="absolute top-2 left-2 right-2 bg-red-700 text-white text-xs rounded p-2 z-40 flex justify-between items-center">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError("")} className="ml-2 font-bold">✕</button>
+        </div>
+      )}
       <h2 className="text-gray-300 text-xs font-bold uppercase mb-4 flex items-center gap-2 tracking-wider">
         Membres — {filteredMembers.length}
       </h2>
@@ -152,7 +265,7 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
               >
                 <div className="relative flex-shrink-0">
                   <Image 
-                    src={member.avatar_url || "/default-avatar.png"} 
+                    src={member.avatar_url || user?.avatar_url || "/default-avatar.png"} 
                     alt={member.username} 
                     width={32} height={32} 
                     className="rounded-full bg-gray-700" 
@@ -209,10 +322,21 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
                             </button>
                         )}
 
-                        {/* Kick (Toujours dispo si canManage est true, sauf si Owner vs Admin géré par canManage) */}
-                        <button className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
+                        {/* Expulser */}
+                        <button onClick={() => handleAction("kick", member.user_id)} className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
                             🚪 Expulser
                         </button>
+
+                        {/* Ban temporaire */}
+                        <button onClick={() => { setOpenMenuId(null); setBanModal({ userId: member.user_id, displayName: member.displayName }); }} className="w-full text-left px-3 py-2 text-orange-400 hover:bg-orange-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
+                            ⏳ Ban temporaire
+                        </button>
+
+                        {/* Ban permanent */}
+                        <button onClick={() => handleAction("permban", member.user_id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-700 hover:text-white border-t border-[#3D3D3D] transition flex gap-2 font-semibold">
+                            🔨 Ban permanent
+                        </button>
+                        
                     </div>
                 )}
               </div>
