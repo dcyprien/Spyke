@@ -344,7 +344,7 @@ pub async fn get_direct_messages(db: &DatabaseConnection, claims: Claims, dm_id:
         .ok_or(AppError::NotFound("Direct message conversation not found".to_string()))?;
 
     // Seulement le sender ou le receiver peuvent lire cette conversation
-    if dm_room.sender_id != claims.sub && dm_room.receiver_id != claims.sub {
+     if dm_room.user1_id != claims.sub && dm_room.user2_id != claims.sub {
         return Err(AppError::Forbidden("You are not part of this conversation".to_string()));
     }
 

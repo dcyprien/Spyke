@@ -12,8 +12,8 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub content: String,
 
-    pub sender_id: Uuid,
-    pub receiver_id: Uuid,
+    pub user1_id: Uuid,
+    pub user2_id: Uuid,
 
     pub created_at: DateTimeUtc,
 }
@@ -22,21 +22,21 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(
         belongs_to = "crate::domain::models::user::Entity",
-        from = "Column::SenderId",
+        from = "Column::User1Id",
         to = "crate::domain::models::user::Column::Id",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]
-    Sender,
+    User1,
     
     #[sea_orm(
         belongs_to = "crate::domain::models::user::Entity",
-        from = "Column::ReceiverId",
+        from = "Column::User2Id",
         to = "crate::domain::models::user::Column::Id",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]
-    Receiver,
+    User2,
 }
 
 impl ActiveModelBehavior for ActiveModel {}
