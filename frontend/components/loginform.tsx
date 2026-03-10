@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../app/context";
+import { useLang } from "../app/langContext";
 
 type Props = {
   switchToRegister: () => void;
@@ -10,7 +11,7 @@ type Props = {
 export default function LoginForm({ switchToRegister }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  
+  const { t } = useLang();
   const { refreshUserData } = useAuth(); 
 
  const handleSubmit = (e: React.FormEvent) => {
@@ -52,7 +53,7 @@ export default function LoginForm({ switchToRegister }: Props) {
       router.push("/main");
     })
     .catch((err) => {
-      alert("Erreur de connexion: " + err.message);
+      alert(t.login_error + err.message);
     });
 };
 
@@ -61,14 +62,14 @@ export default function LoginForm({ switchToRegister }: Props) {
   return (
     <div className="max-w-md mx-auto p-6 bg-white dark:bg-[#1E1E2E] rounded-lg shadow-lg">
       <h1 className="text-2xl font-bold text-center text-heading dark:text-white mb-6">
-        Connexion
+        {t.login_title}
       </h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Username */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Username
+            {t.login_username}
           </label>
           <input
             type="text"
@@ -82,7 +83,7 @@ export default function LoginForm({ switchToRegister }: Props) {
         {/* Password */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password
+            {t.login_password}
           </label>
           <input
             type="password"
@@ -98,18 +99,18 @@ export default function LoginForm({ switchToRegister }: Props) {
           type="submit"
           className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition"
         >
-          Log in
+          {t.login_submit}
         </button>
       </form>
 
       {/* Footer */}
       <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-        No account?{" "}
+        {t.login_no_account}{" "}
         <button
           onClick={switchToRegister}
           className="text-blue-600 dark:text-cyan-400 underline"
         >
-          Inscription
+          {t.login_register_link}
         </button>
       </p>
     </div>

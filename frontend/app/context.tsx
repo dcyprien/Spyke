@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
-import { Server } from "../components/chatbar"; // Assurez-vous que le chemin est bon
+import { Server } from "../components/chatbar";
+import { useLang } from "./langContext";
 
 export interface User {
   id: string;
@@ -32,6 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [banNotifications, setBanNotifications] = useState<{ message: string; serverId: number }[]>([]);
+
+  const { t } = useLang();
+  const tRef = useRef(t);
+  useEffect(() => { tRef.current = t; }, [t]);
 
   const dismissBanNotification = () => setBanNotifications(prev => prev.slice(1));
 
@@ -83,18 +88,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           for (const ban of data.pending_bans) {
             let msg: string;
             if (!ban.banned_until) {
-              msg = `❌ Vous avez été banni définitivement du serveur "${ban.server_name}".`;
+              msg = tRef.current.ban_offline_perm(ban.server_name);
             } else {
               const until = new Date(ban.banned_until);
               const diffSecs = Math.round((until.getTime() - Date.now()) / 1000);
               if (diffSecs <= 15) {
-                msg = `🚪 Vous avez été expulsé du serveur "${ban.server_name}". Vous pourrez rejoindre dans quelques secondes.`;
+                msg = tRef.current.ban_offline_kicked(ban.server_name);
               } else {
                 const days = Math.floor(diffSecs / 86400);
                 const hours = Math.floor(diffSecs / 3600);
-                if (days >= 1) msg = `⏳ Vous avez été banni temporairement du serveur "${ban.server_name}" pour ${days} jour(s).`;
-                else if (hours >= 1) msg = `⏳ Vous avez été banni temporairement du serveur "${ban.server_name}" pour ${hours} heure(s).`;
-                else msg = `⏳ Vous avez été banni temporairement du serveur "${ban.server_name}" pour ${Math.ceil(diffSecs / 60)} minute(s).`;
+                if (days >= 1) msg = tRef.current.ban_offline_days(ban.server_name, days);
+                else if (hours >= 1) msg = tRef.current.ban_offline_hours(ban.server_name, hours);
+                else msg = tRef.current.ban_offline_minutes(ban.server_name, Math.ceil(diffSecs / 60));
               }
             }
             pushBanNotification({ message: msg, serverId: ban.server_id });
@@ -176,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (parsed.type === "user_kicked") {
                     const currentUserId = currentUserIdRef.current || localStorage.getItem("current_user_id");
                     if (currentUserId && String(data.user_id) === String(currentUserId)) {
-                        pushBanNotification({ message: "Vous avez été expulsé de ce serveur.", serverId: data.server_id });
+                        pushBanNotification({ message: tRef.current.ban_kicked, serverId: data.server_id });
                         setServers((prev: any[]) => prev.filter((s: any) => String(s.id) !== String(data.server_id)));
                     } else {
                         setServers((prev: any[]) => prev.map((server: any) => {
@@ -193,18 +198,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     if (currentUserId && String(data.user_id) === String(currentUserId)) {
                         let msg: string;
                         if (!data.banned_until) {
-                            msg = "❌ Vous avez été banni définitivement de ce serveur. Vous ne pouvez plus le rejoindre.";
+                            msg = tRef.current.ban_permanent;
                         } else {
                             const until = new Date(data.banned_until);
                             const diffSecs = Math.round((until.getTime() - Date.now()) / 1000);
                             if (diffSecs <= 15) {
-                                msg = "🚪 Vous avez été expulsé de ce serveur. Vous pourrez rejoindre dans quelques secondes.";
+                                msg = tRef.current.ban_kicked;
                             } else {
                                 const hours = Math.floor(diffSecs / 3600);
                                 const days = Math.floor(diffSecs / 86400);
-                                if (days >= 1) msg = `⏳ Vous avez été banni temporairement pour ${days} jour(s).`;
-                                else if (hours >= 1) msg = `⏳ Vous avez été banni temporairement pour ${hours} heure(s).`;
-                                else msg = `⏳ Vous avez été banni temporairement pour ${Math.ceil(diffSecs / 60)} minute(s).`;
+                                if (days >= 1) msg = tRef.current.ban_temp_days(days);
+                                else if (hours >= 1) msg = tRef.current.ban_temp_hours(hours);
+                                else msg = tRef.current.ban_temp_minutes(Math.ceil(diffSecs / 60));
                             }
                         }
                         pushBanNotification({ message: msg, serverId: data.server_id });

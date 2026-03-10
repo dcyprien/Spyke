@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "./context";
+import { LangProvider } from "./langContext";
 
 // Fonts locales Geist
 const geistSans = localFont({
@@ -32,9 +33,11 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#001952] text-white min-h-screen`}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <LangProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </LangProvider>
       </body>
     </html>
   );

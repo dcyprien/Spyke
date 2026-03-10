@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Server } from "./chatbar";
+import { useLang } from "../app/langContext";
 
 type Props = {
   selectedServer?: Server | null;
@@ -14,6 +15,7 @@ export default function Navbar({ selectedServer }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const router = useRouter();
+  const { t, toggleLang } = useLang();
 
   const handleSignOut = async () => {
     try {
@@ -63,6 +65,31 @@ export default function Navbar({ selectedServer }: Props) {
 
 
       <div className="flex items-center gap-4">    
+
+          {/* Bouton langue */}
+          <button
+          onClick={toggleLang}
+          className="
+            relative overflow-hidden
+            px-4 py-2
+            text-sm font-bold text-blue-400
+            bg-blue-500/10 
+            rounded-lg
+            border border-blue-500/30
+            transition-all duration-300 ease-out
+            hover:bg-blue-600 hover:text-white hover:scale-105 hover:shadow-[0_0_15px_rgba(59,130,246,0.4)]
+            active:scale-95
+            group
+          "
+        >
+          {/* Effet de reflet qui passe sur le bouton au survol */}
+          <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] transition-transform"></span>
+          
+          <span className="relative flex items-center gap-2">
+            🌐 {t.nav_lang_switch}
+          </span>
+        </button>
+
         {/* Bouton Sign Out direct avec effets */}
         <button
           onClick={handleSignOut}
@@ -86,7 +113,7 @@ export default function Navbar({ selectedServer }: Props) {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            Sign out
+            {t.nav_signout}
           </span>
         </button>
       </div>
@@ -109,7 +136,7 @@ export default function Navbar({ selectedServer }: Props) {
           <ul className="font-medium flex flex-col p-4 md:p-0 mt-4 rounded-base bg-neutral-secondary-soft md:flex-row md:space-x-8 md:mt-0 md:border-0 md:bg-neutral-primary">
             <li>
               <a href="#" className="block py-2 px-3 text-heading rounded hover:bg-neutral-tertiary md:hover:bg-transparent md:border-0 md:hover:text-fg-brand md:p-0">
-                {selectedServer ? `#${selectedServer.name}` : "Aucun serveur"}
+                {selectedServer ? `#${selectedServer.name}` : t.nav_no_server}
               </a>
             </li>
           </ul>

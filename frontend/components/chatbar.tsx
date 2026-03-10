@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { useAuth } from "../app/context";
+import { useLang } from "../app/langContext";
 
 export interface Channel {
   id: string;
@@ -28,7 +29,8 @@ type ServerBarProps = {
 };
 
 export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBarProps) {
-  const { servers, addServer, setServers, refreshUserData, user, socket } = useAuth(); // On récupère user et socket
+  const { servers, addServer, setServers, refreshUserData, user, socket } = useAuth();
+  const { t } = useLang();
   
   const [expandedServerId, setExpandedServerId] = useState<number | null>(null);
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
@@ -59,12 +61,12 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
         setServerName("");
         setServerDescription("");
       }
-    } catch (e) { alert("Erreur création"); }
+    } catch (e) { alert(t.chatbar_create_error); }
   };
 
   const handleJoinServer = async () => {
     if (!joinCode.trim() || !joinServerId.trim()) {
-        alert("Veuillez remplir l'ID et le Code");
+        alert(t.chatbar_join_fields_required);
         return;
     }
 
@@ -91,26 +93,26 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
         const raw: string = errorData.error || "";
         let msg: string;
         if (raw.toLowerCase().includes("permanently banned")) {
-          msg = "❌ Vous êtes banni définitivement de ce serveur et ne pouvez plus le rejoindre.";
+          msg = t.chatbar_join_banned_perm;
         } else if (raw.toLowerCase().includes("temporarily banned")) {
-          msg = "⏳ Vous êtes temporairement banni de ce serveur. Réessayez plus tard.";
+          msg = t.chatbar_join_banned_temp;
         } else if (raw.toLowerCase().includes("already a member")) {
-          msg = "Vous êtes déjà membre de ce serveur.";
+          msg = t.chatbar_join_already_member;
         } else if (raw.toLowerCase().includes("invalid invitation")) {
-          msg = "Code d'invitation invalide.";
+          msg = t.chatbar_join_invalid_code;
         } else {
-          msg = raw || "Impossible de rejoindre le serveur.";
+          msg = raw || t.chatbar_join_generic_error;
         }
         alert(msg);
       }
     } catch (error: any) {
       console.error(error);
-      alert("Impossible de rejoindre le serveur (erreur réseau).");
+      alert(t.chatbar_join_network_error);
     }
   };
 
   const handleDeleteServer = async (serverId: number) => {
-    if(!confirm("Supprimer ce serveur ?")) return;
+    if(!confirm(t.chatbar_delete_server_confirm)) return;
     try {
         const token = localStorage.getItem("access_token");
         const res = await fetch(`http://localhost:3000/servers/${serverId}`, {
@@ -130,7 +132,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
   };
 
   const handleLeaveServer = async (serverId: number) => {
-    if(!confirm("Voulez-vous vraiment quitter ce serveur ?")) return;
+    if(!confirm(t.chatbar_leave_server_confirm)) return;
     try {
         const token = localStorage.getItem("access_token");
         const res = await fetch(`http://localhost:3000/servers/${serverId}/leave`, {
@@ -152,7 +154,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
   // --- ACTIONS CHANNEL ---
 
   const handleCreateChannel = async (serverId: number) => {
-    const name = prompt("Nom du nouveau salon :");
+    const name = prompt(t.chatbar_channel_name_prompt);
     if (!name) return;
     
     try {
@@ -167,7 +169,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
   };
   
   const handleDeleteChannel = async (channelId: string) => {
-    if (!confirm("Supprimer ce salon ?")) return;
+    if (!confirm(t.chatbar_delete_channel_confirm)) return;
     try {
       const token = localStorage.getItem("access_token");
       const res = await fetch(`http://localhost:3000/channels/${channelId}`, {
@@ -208,9 +210,8 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
 
           if (res.ok) {
               setEditingChannelId(null); 
-              // Le WebSocket s'occupera de la mise à jour visuelle
           } else {
-              alert("Erreur lors de la modification");
+              alert(t.chatbar_edit_error);
           }
       } catch(e) { console.error(e); }
   };
@@ -277,20 +278,20 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
       
       {/* --- ZONE CRÉATION / JOIN --- */}
       <div className="mb-4 space-y-2">
-        <h2 className="text-white text-lg font-bold mb-2">Serveurs</h2>
+        <h2 className="text-white text-lg font-bold mb-2">{t.chatbar_servers}</h2>
         
         <button 
             onClick={() => setShowCreateModal(true)} 
             className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition shadow-md"
         >
-          Créer un Serveur
+          {t.chatbar_create_server}
         </button>
         
         <button 
             onClick={() => setShowJoinInput(!showJoinInput)} 
             className="w-full py-2 bg-[#2A2A3D] hover:bg-[#3D3D5C] text-white rounded-lg font-medium transition border border-gray-600"
         >
-          Rejoindre un Serveur
+          {t.chatbar_join_server}
         </button>
 
         {showJoinInput && (
@@ -299,21 +300,21 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
                 type="number" 
                 value={joinServerId} 
                 onChange={(e) => setJoinServerId(e.target.value)} 
-                placeholder="ID du serveur" 
+                placeholder={t.chatbar_server_id} 
                 className="w-full p-2 rounded bg-[#0F0F1A] text-white text-sm outline-none border border-gray-600 focus:border-blue-500" 
             />
             <input 
                 type="number" 
                 value={joinCode} 
                 onChange={(e) => setJoinCode(e.target.value)} 
-                placeholder="Code invitation (4 chiffres)" 
+                placeholder={t.chatbar_invite_code} 
                 className="w-full p-2 rounded bg-[#0F0F1A] text-white text-sm outline-none border border-gray-600 focus:border-blue-500" 
             />
             <button 
                 onClick={handleJoinServer} 
                 className="w-full bg-green-600 hover:bg-green-700 py-1.5 rounded text-white text-sm font-bold transition"
             >
-                Confirmer
+                {t.chatbar_confirm}
             </button>
           </div>
         )}
@@ -383,7 +384,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
               {/* LISTE DES CHANNELS */}
               {isExpanded && (
                 <div className="mt-1 py-2 px-2 bg-[#0F0F1A] rounded-b-lg border-x border-b border-[#3D3D3D] space-y-1 ml-2 border-l-2 border-l-blue-600">
-                  {serverChannels.length === 0 && <p className="text-xs text-gray-500 text-center py-1">Aucun salon</p>}
+                  {serverChannels.length === 0 && <p className="text-xs text-gray-500 text-center py-1">{t.chatbar_no_channel}</p>}
                   
                   {serverChannels.map(chan => {
                       
@@ -462,7 +463,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
                             onClick={() => handleCreateChannel(server.id)} 
                             className="text-[10px] text-gray-400 hover:text-white uppercase font-bold tracking-wider hover:underline"
                         >
-                        + Nouveau Salon
+                        {t.chatbar_new_channel}
                         </button>
                     )}
                   </div>
@@ -477,9 +478,9 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
           <div className="bg-[#1E1E2E] p-6 rounded-xl w-96 border border-[#3D3D3D] shadow-2xl">
-            <h3 className="text-white text-xl font-bold mb-4">Nouveau Serveur</h3>
+            <h3 className="text-white text-xl font-bold mb-4">{t.chatbar_modal_new_server}</h3>
             
-            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nom</label>
+            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">{t.chatbar_modal_name}</label>
             <input 
                 type="text" 
                 className="w-full mb-4 p-2 rounded bg-[#0F0F1A] text-white border border-[#3D3D3D] focus:border-blue-500 outline-none transition" 
@@ -487,7 +488,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
                 onChange={e => setServerName(e.target.value)} 
             />
             
-            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Description</label>
+            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">{t.chatbar_modal_description}</label>
             <textarea 
                 className="w-full mb-6 p-2 rounded bg-[#0F0F1A] text-white border border-[#3D3D3D] focus:border-blue-500 outline-none h-24 resize-none transition" 
                 value={serverDescription}
@@ -495,8 +496,8 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
             />
             
             <div className="flex justify-between items-center bg-[#0F0F1A] -m-6 mt-0 p-4 rounded-b-xl border-t border-[#3D3D3D]">
-               <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white text-sm font-medium transition">Annuler</button>
-               <button onClick={handleCreateServer} className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow-lg transition">Créer</button>
+               <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-white text-sm font-medium transition">{t.chatbar_modal_cancel}</button>
+               <button onClick={handleCreateServer} className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold shadow-lg transition">{t.chatbar_modal_create}</button>
             </div>
           </div>
         </div>

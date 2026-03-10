@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Server, Channel } from "./chatbar"; 
 import { useAuth } from "../app/context";
+import { useLang } from "../app/langContext";
 
 type Message = {
   id: string; 
@@ -21,6 +22,7 @@ type Props = {
 
 export default function Chat({ selectedServer, selectedChannel }: Props) {
   const { user, socket } = useAuth();
+  const { t } = useLang();
   
   // États de base
   const [message, setMessage] = useState("");
@@ -292,7 +294,7 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
       {/* Header (Inchangé) */}
       <div className="py-3 border-b border-white/10 mb-4 flex items-center justify-center">
         <h3 className="text-white font-bold text-lg">
-          {selectedChannel ? `# ${selectedChannel.name}` : "Sélectionnez un salon"}
+          {selectedChannel ? `# ${selectedChannel.name}` : t.chat_select_channel}
         </h3>
         {selectedServer && <span className="text-blue-gray text-xs bg-dark-navy px-2 py-1 rounded">{selectedServer.name}</span>}
       </div>
@@ -300,9 +302,9 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
       {/* Historique */}
       <div ref={messagesRef} onScroll={handleScroll} className="flex-1 space-y-4 mb-4 overflow-y-auto custom-scrollbar px-2">
         {!selectedChannel ? (
-           <div className="text-center text-blue-gray mt-10">Sélectionnez un salon</div>
+           <div className="text-center text-blue-gray mt-10">{t.chat_select_channel}</div>
         ) : messages.length === 0 ? (
-          <div className="text-center text-blue-gray py-8 italic">Aucun message.</div>
+          <div className="text-center text-blue-gray py-8 italic">{t.chat_no_messages}</div>
         ) : (
           messages.map((msg) => (
             <div 
@@ -371,7 +373,7 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
                                 }}
                                 className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 hover:text-white flex items-center gap-2"
                             >
-                                <span>✏️</span> Modifier
+                        <span>✏️</span> {t.chat_edit}
                             </button>
                         )}
 
@@ -384,7 +386,7 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
                             // Conditionner delete si admin peut aussi
                             className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-500/10 hover:text-red-400 flex items-center gap-2 border-t border-gray-700 mt-1 pt-2"
                         >
-                            <span>🗑️</span> Supprimer
+                            <span>🗑️</span> {t.chat_delete}
                         </button>
                     </div>
                 )}
@@ -428,7 +430,7 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
           value={message}
           onChange={handleInputChange}
           onKeyDown={(e) => { if(e.key === "Enter") { sendMessage(); } }}
-          placeholder={selectedChannel ? `Envoyer dans # ${selectedChannel.name}` : "..."}
+          placeholder={selectedChannel ? `${t.chat_send_placeholder} # ${selectedChannel.name}` : "..."}
           disabled={!selectedChannel}
           className="flex-1 bg-dark-navy text-white px-4 py-2 rounded-lg outline-none border border-white/10 focus:border-cyan disabled:opacity-30"
         />
@@ -437,7 +439,7 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
           disabled={!selectedChannel}
           className="bg-cyan hover:bg-blue-mid text-white px-6 py-2 rounded-lg font-bold disabled:opacity-30 transition shadow-lg"
         >
-          Envoyer
+          {t.chat_send_btn}
         </button>
 
       </div>
