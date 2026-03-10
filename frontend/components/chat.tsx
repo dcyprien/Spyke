@@ -18,9 +18,10 @@ type Message = {
 type Props = {
   selectedServer?: Server | null;
   selectedChannel?: Channel | null;
+  mobileTab?: string;
 };
 
-export default function Chat({ selectedServer, selectedChannel }: Props) {
+export default function Chat({ selectedServer, selectedChannel, mobileTab }: Props) {
   const { user, socket } = useAuth();
   const { t } = useLang();
   
@@ -290,7 +291,11 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
 
 
   return (
-    <div className="flex flex-col h-screen pt-20 px-6 bg-[#001952]">
+    <div className={`flex flex-col h-screen bg-[#001952]
+      pt-16 pb-16 md:pt-20 md:pb-0 px-4
+      md:ml-64 lg:mr-64
+      ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
+    `}>
       {/* Header (Inchangé) */}
       <div className="py-3 border-b border-white/10 mb-4 flex items-center justify-center">
         <h3 className="text-white font-bold text-lg">
@@ -397,7 +402,7 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
       </div>
 
       {/* Input de saisie principal (Inchangé) */}
-      <div className="max-w-xl mx-auto w-full flex items-center gap-2 pb-6 relative">
+      <div className="w-full flex items-center gap-1 sm:gap-2 pb-4 relative min-w-0">
           {/* ... emoji picker ... */}
          {/* ... input ... */}
          {/* Je ne remets pas tout le code bas de page car il ne change pas, 
@@ -432,14 +437,17 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
           onKeyDown={(e) => { if(e.key === "Enter") { sendMessage(); } }}
           placeholder={selectedChannel ? `${t.chat_send_placeholder} # ${selectedChannel.name}` : "..."}
           disabled={!selectedChannel}
-          className="flex-1 bg-dark-navy text-white px-4 py-2 rounded-lg outline-none border border-white/10 focus:border-cyan disabled:opacity-30"
+          className="flex-1 min-w-0 bg-dark-navy text-white px-3 py-2 rounded-lg outline-none border border-white/10 focus:border-cyan disabled:opacity-30 text-sm"
         />
         <button
           onClick={sendMessage}
           disabled={!selectedChannel}
-          className="bg-cyan hover:bg-blue-mid text-white px-6 py-2 rounded-lg font-bold disabled:opacity-30 transition shadow-lg"
+          className="bg-cyan hover:bg-blue-mid text-white px-3 sm:px-5 py-2 rounded-lg font-bold disabled:opacity-30 transition shadow-lg flex-shrink-0 flex items-center gap-1 text-sm"
         >
-          {t.chat_send_btn}
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
+          <span className="hidden sm:inline">{t.chat_send_btn}</span>
         </button>
 
       </div>

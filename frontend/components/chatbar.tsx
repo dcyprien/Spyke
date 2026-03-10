@@ -26,9 +26,10 @@ type ServerBarProps = {
   onChannelSelect?: (c: Channel | null) => void;
   onJoinServer?: () => void;
   onCreateServer?: () => void;
+  mobileTab?: string;
 };
 
-export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBarProps) {
+export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab }: ServerBarProps) {
   const { servers, addServer, setServers, refreshUserData, user, socket } = useAuth();
   const { t } = useLang();
   
@@ -274,8 +275,15 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
   const [editChannelName, setEditChannelName] = useState("");
 
   return (
-    <div className="fixed top-16 h-[calc(100vh-4rem)] w-64 bg-[#001839] border-l border-[#3D3D3D] flex flex-col p-4 z-10 shadow-lg">
-      
+    <>
+      <div className={`
+        fixed left-0 bg-[#001839] border-r border-[#3D3D3D] flex-col p-4 z-10 shadow-lg
+        top-16 w-full h-[calc(100vh-8rem)]
+        md:w-64 md:h-[calc(100vh-4rem)]
+        ${mobileTab === "channels" ? "flex" : "hidden"}
+        md:flex
+      `}>
+
       {/* --- ZONE CRÉATION / JOIN --- */}
       <div className="mb-4 space-y-2">
         <h2 className="text-white text-lg font-bold mb-2">{t.chatbar_servers}</h2>
@@ -503,5 +511,6 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
         </div>
       )}
     </div>
+    </>
   );
 }
