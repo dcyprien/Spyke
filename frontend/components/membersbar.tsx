@@ -26,9 +26,10 @@ interface Props {
   selectedServer?: ServerWithMembers | null;
   userStatus?: string;
   selectedChannel?: any;
+  mobileTab?: string;
 }
 
-export default function MembersBar({ selectedServer, userStatus }: Props) {
+export default function MembersBar({ selectedServer, userStatus, mobileTab }: Props) {
   const { user, servers, refreshUserData } = useAuth();
   const { t } = useLang();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -191,7 +192,14 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
 
 
   return (
-    <div className="fixed top-16 right-0 h-[calc(100vh-4rem)] w-64 bg-[#001839] border-l border-[#3D3D3D] flex flex-col p-4 z-10 shadow-lg">
+    <>
+      <div className={`
+        fixed right-0 bg-[#001839] border-l border-[#3D3D3D] flex-col p-4 z-10 shadow-lg
+        top-16 w-full h-[calc(100vh-8rem)]
+        md:w-64 md:h-[calc(100vh-4rem)]
+        ${mobileTab === "members" ? "flex" : "hidden"}
+        md:flex
+      `}>
 
       {/* Modal ban temporaire */}
       {banModal && (
@@ -334,5 +342,6 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
         )}
       </div>
     </div>
+    </>
   );
 }
