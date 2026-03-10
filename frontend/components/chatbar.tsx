@@ -87,12 +87,25 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
         setJoinServerId("");
         setShowJoinInput(false);
       } else {
-        const errorData = await res.json();
-        alert(`Erreur : ${errorData.message || "Code invalide ou ID incorrect"}`);
+        const errorData = await res.json().catch(() => ({}));
+        const raw: string = errorData.error || "";
+        let msg: string;
+        if (raw.toLowerCase().includes("permanently banned")) {
+          msg = "❌ Vous êtes banni définitivement de ce serveur et ne pouvez plus le rejoindre.";
+        } else if (raw.toLowerCase().includes("temporarily banned")) {
+          msg = "⏳ Vous êtes temporairement banni de ce serveur. Réessayez plus tard.";
+        } else if (raw.toLowerCase().includes("already a member")) {
+          msg = "Vous êtes déjà membre de ce serveur.";
+        } else if (raw.toLowerCase().includes("invalid invitation")) {
+          msg = "Code d'invitation invalide.";
+        } else {
+          msg = raw || "Impossible de rejoindre le serveur.";
+        }
+        alert(msg);
       }
     } catch (error: any) {
       console.error(error);
-      alert("Impossible de rejoindre le serveur (Erreur réseau)");
+      alert("Impossible de rejoindre le serveur (erreur réseau).");
     }
   };
 

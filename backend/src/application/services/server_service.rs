@@ -889,7 +889,8 @@ pub async fn ban_user(
     }
 
     // 4. Ajouter l'utilisateur à la table des bans
-    let banned_until = req.duration.map(|days| chrono::Utc::now().naive_utc() + chrono::Duration::days(days as i64));
+    // duration est en secondes (ex: 10 = 10s, 3600 = 1h, 86400 = 1 jour)
+    let banned_until = req.duration.map(|secs| chrono::Utc::now().naive_utc() + chrono::Duration::seconds(secs as i64));
     
     let new_ban = server_ban::ActiveModel {
         id: Set(Uuid::new_v4()),

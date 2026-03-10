@@ -16,6 +16,8 @@ interface AuthState {
   servers: Server[];
   isLoading: boolean;
   socket: WebSocket | null;
+  banNotification: { message: string; serverId: number } | null;
+  clearBanNotification: () => void;
   addServer: (server: Server) => void;
   setServers: (servers: Server[]) => void; 
   logout: () => void;
@@ -29,6 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [servers, setServers] = useState<Server[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [banNotification, setBanNotification] = useState<{ message: string; serverId: number } | null>(null);
+
+  const clearBanNotification = () => setBanNotification(null);
+
+  // Ref pour accéder à l'état user courant dans le callback WS sans le recréer
+  const userRef = { current: user };
 
   // Fonction unique de récupération de données
   const refreshUserData = async () => {
@@ -52,6 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           display_name: data.display_name,
           avatar_url: data.avatar_url,
         });
+        // Stocker l'ID pour la d\u00e9tection des events WS (kick/ban)
+        localStorage.setItem("current_user_id", data.id);
 
         const mappedServers = (data.servers || []).map((s: any) => ({
           ...s,
@@ -126,6 +136,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
                 // ---------------------------------------------------
 
+                if (parsed.type === "user_kicked") {
+                    // Supprimer le membre de la liste ET notifier si c'est moi
+                    const currentUserId = localStorage.getItem("current_user_id");
+                    if (currentUserId && String(data.user_id) === String(currentUserId)) {
+                        setBanNotification({ message: "Vous avez été expulsé de ce serveur.", serverId: data.server_id });
+                        setServers((prev: any[]) => prev.filter((s: any) => s.id !== data.server_id));
+                    } else {
+                        setServers((prev: any[]) => prev.map((server: any) => {
+                            if (server.id === data.server_id) {
+                                return { ...server, members: (server.members || []).filter((m: any) => String(m.id) !== String(data.member_id)) };
+                            }
+                            return server;
+                        }));
+                    }
+                }
+
+                if (parsed.type === "user_banned") {
+                    const currentUserId = localStorage.getItem("current_user_id");
+                    if (currentUserId && String(data.user_id) === String(currentUserId)) {
+                        let msg: string;
+                        if (!data.banned_until) {
+                            msg = "❌ Vous avez été banni définitivement de ce serveur. Vous ne pouvez plus le rejoindre.";
+                        } else {
+                            // Calculer la différence pour détecter un kick (10s)
+                            const until = new Date(data.banned_until);
+                            const diffSecs = Math.round((until.getTime() - Date.now()) / 1000);
+                            if (diffSecs <= 15) {
+                                msg = "🚪 Vous avez été expulsé de ce serveur. Vous pourrez rejoindre dans quelques secondes.";
+                            } else {
+                                const hours = Math.floor(diffSecs / 3600);
+                                const days = Math.floor(diffSecs / 86400);
+                                if (days >= 1) msg = `⏳ Vous avez été banni temporairement pour ${days} jour(s).`;
+                                else if (hours >= 1) msg = `⏳ Vous avez été banni temporairement pour ${hours} heure(s).`;
+                                else msg = `⏳ Vous avez été banni temporairement pour ${Math.ceil(diffSecs / 60)} minute(s).`;
+                            }
+                        }
+                        setBanNotification({ message: msg, serverId: data.server_id });
+                        setServers((prev: any[]) => prev.filter((s: any) => s.id !== data.server_id));
+                    } else {
+                        // Retirer le membre banni de la liste pour les autres
+                        setServers((prev: any[]) => prev.map((server: any) => {
+                            if (server.id === data.server_id) {
+                                return { ...server, members: (server.members || []).filter((m: any) => String(m.id) !== String(data.member_id)) };
+                            }
+                            return server;
+                        }));
+                    }
+                }
+
                 if (parsed.type === "user_joined") {
                     setServers((prevServers: any[]) => {
                         return prevServers.map((server) => {
@@ -194,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     localStorage.removeItem("access_token");
     localStorage.removeItem("username");
+    localStorage.removeItem("current_user_id");
     setUser(null);
     setServers([]);
     
@@ -206,7 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, servers, isLoading, socket, setServers, addServer, logout, refreshUserData }}>
+    <AuthContext.Provider value={{ user, servers, isLoading, socket, banNotification, clearBanNotification, setServers, addServer, logout, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );
