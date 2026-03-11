@@ -19,9 +19,8 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Messages::Content).text().not_null())
                     .col(ColumnDef::new(Messages::UserId).uuid().not_null())
-                    .col(ColumnDef::new(Messages::ChannelId).uuid().null())
-                    .col(ColumnDef::new(Messages::ServerId).integer().null())
-                    .col(ColumnDef::new(Messages::DirectMessage).uuid().null())
+                    .col(ColumnDef::new(Messages::ChannelId).uuid().not_null())
+                    .col(ColumnDef::new(Messages::ServerId).integer().not_null())
                     .col(
                         ColumnDef::new(Messages::CreatedAt)
                             .timestamp_with_time_zone()
@@ -79,7 +78,6 @@ enum Messages {
     UserId,
     ServerId,
     ChannelId,
-    DirectMessage,
     CreatedAt,
 }
 
