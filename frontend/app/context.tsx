@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
-import { Server } from "../components/chatbar"; // Assurez-vous que le chemin est bon
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { Server } from "../components/chatbar";
+import { useLang } from "./langContext";
 
 export interface User {
   id: string;
@@ -16,8 +17,8 @@ interface AuthState {
   servers: Server[];
   isLoading: boolean;
   socket: WebSocket | null;
-  banNotification: { message: string; serverId: number } | null;
-  clearBanNotification: () => void;
+  banNotifications: { message: string; serverId: number }[];
+  dismissBanNotification: () => void;
   addServer: (server: Server) => void;
   setServers: (servers: Server[]) => void; 
   logout: () => void;
@@ -32,14 +33,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [servers, setServers] = useState<Server[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [banNotification, setBanNotification] = useState<{ message: string; serverId: number } | null>(null);
+  const [banNotifications, setBanNotifications] = useState<{ message: string; serverId: number }[]>([]);
 
-  const clearBanNotification = () => setBanNotification(null);
+  const { t } = useLang();
+  const tRef = useRef(t);
+  useEffect(() => { tRef.current = t; }, [t]);
 
   const wsRef = useRef<WebSocket | null>(null);
 
   // Ref pour accéder à l'état user courant dans le callback WS sans le recréer
   const userRef = { current: user };
+  const dismissBanNotification = () => setBanNotifications(prev => prev.slice(1));
+
+  // Helper to push a notification into the queue (deduplicated by serverId)
+  const pushBanNotification = (notif: { message: string; serverId: number }) => {
+    setBanNotifications(prev => {
+      if (prev.some(n => n.serverId === notif.serverId && n.message === notif.message)) return prev;
+      return [...prev, notif];
+    });
+  };
+
+  // Ref stable pour lire le user_id courant depuis la closure WS (stale closure fix)
+  const currentUserIdRef = useRef<string | null>(null);
 
   // Fonction unique de récupération de données
   const refreshUserData = async () => {
@@ -63,7 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           display_name: data.display_name,
           avatar_url: data.avatar_url,
         });
-        // Stocker l'ID pour la d\u00e9tection des events WS (kick/ban)
+        // Stocker l'ID pour la détection des events WS (kick/ban)
+        currentUserIdRef.current = String(data.id);
         localStorage.setItem("current_user_id", data.id);
 
         const mappedServers = (data.servers || []).map((s: any) => ({
@@ -71,6 +87,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           invitcode: s.invitcode ? String(s.invitcode) : "",
         }));
         setServers(mappedServers);
+
+        // Show notifications for bans that happened while offline
+        if (data.pending_bans && data.pending_bans.length > 0) {
+          for (const ban of data.pending_bans) {
+            let msg: string;
+            if (!ban.banned_until) {
+              msg = tRef.current.ban_offline_perm(ban.server_name);
+            } else {
+              const until = new Date(ban.banned_until);
+              const diffSecs = Math.round((until.getTime() - Date.now()) / 1000);
+              if (diffSecs <= 15) {
+                msg = tRef.current.ban_offline_kicked(ban.server_name);
+              } else {
+                const days = Math.floor(diffSecs / 86400);
+                const hours = Math.floor(diffSecs / 3600);
+                if (days >= 1) msg = tRef.current.ban_offline_days(ban.server_name, days);
+                else if (hours >= 1) msg = tRef.current.ban_offline_hours(ban.server_name, hours);
+                else msg = tRef.current.ban_offline_minutes(ban.server_name, Math.ceil(diffSecs / 60));
+              }
+            }
+            pushBanNotification({ message: msg, serverId: ban.server_id });
+          }
+        }
       } else {
         localStorage.removeItem("access_token");
       }

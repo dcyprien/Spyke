@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import Image from "next/image";
 import { useAuth } from "../app/context";
+import { useLang } from "../app/langContext";
 
 // Types
 interface MemberItem {
@@ -25,11 +26,12 @@ interface Props {
   selectedServer?: ServerWithMembers | null;
   userStatus?: string;
   selectedChannel?: any;
+  mobileTab?: string;
 }
 
-export default function MembersBar({ selectedServer, userStatus }: Props) {
-  // On récupère 'servers' pour toujours avoir les données à jour (fix du problème d'affichage)
-  const { user, servers, refreshUserData } = useAuth(); // AJOUT DE refreshUserData
+export default function MembersBar({ selectedServer, userStatus, mobileTab }: Props) {
+  const { user, servers, refreshUserData } = useAuth();
+  const { t } = useLang();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [banModal, setBanModal] = useState<{ userId: string; displayName: string } | null>(null);
   const [banValue, setBanValue] = useState("30");
@@ -106,8 +108,7 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
         if (action === "promote") newRole = "Admin";
         else if (action === "demote") newRole = "Member";
         else if (action === "transfer") {
-            // Sécurité côté client pour une action critique
-            if (!window.confirm(`Êtes-vous sûr de vouloir transférer la propriété du serveur ? Vous deviendrez Admin.`)) {
+            if (!window.confirm(t.members_transfer_confirm)) {
                 return;
             }
             newRole = "Owner";
@@ -127,8 +128,7 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
         }
 
         if (action === "kick") {
-            if (!window.confirm("Expulser ce membre du serveur ? Il pourra rejoindre après 10 secondes.")) return;
-            // Expulsion = ban de 10 secondes
+            if (!window.confirm(t.members_kick_confirm)) return;
             const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${targetUserId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -136,15 +136,13 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                setActionError(err.error || "Erreur lors de l'expulsion.");
-            } else {
-                await refreshUserData();
+                setActionError(err.error || t.members_kick_error);
             }
             return;
         }
 
         if (action === "permban") {
-            if (!window.confirm("Bannir définitivement ce membre ? Il ne pourra plus jamais rejoindre ce serveur.")) return;
+            if (!window.confirm(t.members_perm_ban_confirm)) return;
             const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${targetUserId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -152,15 +150,13 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                setActionError(err.error || "Erreur lors du ban permanent.");
-            } else {
-                await refreshUserData();
+                setActionError(err.error || t.members_perm_ban_error);
             }
             return;
         }
     } catch (e) {
         console.error(e);
-        setActionError("Erreur réseau.");
+        setActionError(t.members_network_error);
     }
 };
 
@@ -169,10 +165,9 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
     setBanError("");
     const val = parseInt(banValue, 10);
     if (isNaN(val) || val <= 0) {
-        setBanError("Veuillez entrer une valeur valide (nombre entier positif).");
+        setBanError(t.members_ban_invalid_value);
         return;
     }
-    // duration envoyée en secondes au backend
     const multipliers: Record<"minutes" | "heures" | "jours", number> = { minutes: 60, heures: 3600, jours: 86400 };
     const durationSeconds = val * multipliers[banUnit as "minutes" | "heures" | "jours"];
     const token = localStorage.getItem("access_token");
@@ -184,28 +179,34 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            setBanError(err.error || "Erreur lors du ban temporaire.");
+            setBanError(err.error || t.members_temp_ban_error);
         } else {
             setBanModal(null);
             setBanValue("30");
             setBanUnit("minutes");
-            await refreshUserData();
         }
     } catch (e) {
-        setBanError("Erreur réseau.");
+        setBanError(t.members_network_error);
     }
   };
 
 
   return (
-    <div className="fixed top-16 right-0 h-[calc(100vh-4rem)] w-64 bg-[#001839] border-l border-[#3D3D3D] flex flex-col p-4 z-10 shadow-lg">
+    <>
+      <div className={`
+        fixed right-0 bg-[#001839] border-l border-[#3D3D3D] flex-col p-4 z-10 shadow-lg
+        top-16 w-full h-[calc(100vh-8rem)]
+        md:w-64 md:h-[calc(100vh-4rem)]
+        ${mobileTab === "members" ? "flex" : "hidden"}
+        md:flex
+      `}>
 
       {/* Modal ban temporaire */}
       {banModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setBanModal(null)}>
           <div className="bg-[#181825] border border-[#3D3D3D] rounded-xl p-6 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-white font-bold text-base mb-1">⏳ Ban temporaire</h3>
-            <p className="text-gray-400 text-sm mb-4">Bannir <span className="text-orange-400 font-semibold">{banModal.displayName}</span> pour :</p>
+            <h3 className="text-white font-bold text-base mb-1">{t.members_ban_modal_title}</h3>
+            <p className="text-gray-400 text-sm mb-4">{t.members_ban_for} <span className="text-orange-400 font-semibold">{banModal.displayName}</span></p>
             <div className="flex gap-2 mb-3">
               <input
                 type="number"
@@ -219,15 +220,15 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
                 onChange={e => setBanUnit(e.target.value as any)}
                 className="flex-1 bg-[#11111b] border border-[#3D3D3D] rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-orange-500"
               >
-                <option value="minutes">Minute(s)</option>
-                <option value="heures">Heure(s)</option>
-                <option value="jours">Jour(s)</option>
+                <option value="minutes">{t.members_ban_minutes}</option>
+                <option value="heures">{t.members_ban_hours}</option>
+                <option value="jours">{t.members_ban_days}</option>
               </select>
             </div>
             {banError && <p className="text-red-400 text-xs mb-3">{banError}</p>}
             <div className="flex gap-2 mt-2">
-              <button onClick={() => setBanModal(null)} className="flex-1 px-3 py-2 rounded bg-[#11111b] text-gray-400 hover:text-white text-sm transition">Annuler</button>
-              <button onClick={handleConfirmTempBan} className="flex-1 px-3 py-2 rounded bg-orange-600 hover:bg-orange-500 text-white font-semibold text-sm transition">Confirmer</button>
+              <button onClick={() => setBanModal(null)} className="flex-1 px-3 py-2 rounded bg-[#11111b] text-gray-400 hover:text-white text-sm transition">{t.members_cancel}</button>
+              <button onClick={handleConfirmTempBan} className="flex-1 px-3 py-2 rounded bg-orange-600 hover:bg-orange-500 text-white font-semibold text-sm transition">{t.members_confirm}</button>
             </div>
           </div>
         </div>
@@ -241,12 +242,12 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
         </div>
       )}
       <h2 className="text-gray-300 text-xs font-bold uppercase mb-4 flex items-center gap-2 tracking-wider">
-        Membres — {filteredMembers.length}
+        {t.members_title} — {filteredMembers.length}
       </h2>
 
       <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-gray-700">
         {!activeServer ? (
-          <div className="text-gray-500 text-center text-sm italic mt-10">Sélectionnez un serveur</div>
+          <div className="text-gray-500 text-center text-sm italic mt-10">{t.members_select_server}</div>
         ) : (
             filteredMembers.map((member) => {
                 const isMe = user ? String(user.id) === member.user_id : false;
@@ -277,7 +278,7 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-medium truncate ${isMe ? "text-blue-400 font-bold" : "text-gray-300"}`}>
-                    {member.displayName} {isMe && "(Moi)"}
+                    {member.displayName} {isMe && `(${t.members_me})`}
                   </div>
                   {member.role !== "Member" && (
                      <div className={`text-[10px] font-bold uppercase mt-0.5 flex gap-1 ${roleColors[member.role]}`}>
@@ -305,36 +306,32 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
                         {/* Gestion Rôle Admin/Membre */}
                         {currentUserRole === "Owner" && member.role === "Member" && (
                             <button onClick={() => handleAction("promote", member.user_id)} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-blue-600 hover:text-white transition flex gap-2">
-                                🛡️ Promouvoir Admin
+                                {t.members_promote}
                             </button>
                         )}
                         
                         {currentUserRole === "Owner" && member.role === "Admin" && (
                              <button onClick={() => handleAction("demote", member.user_id)} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-yellow-600 hover:text-white transition flex gap-2">
-                                ⬇️ Rétrograder
+                                {t.members_demote}
                             </button>
                         )}
 
-                        {/* Transfert de Propriété (Uniquement Owner) */}
                         {currentUserRole === "Owner" && (
                              <button onClick={() => handleAction("transfer", member.user_id)} className="w-full text-left px-3 py-2 text-amber-500 hover:bg-amber-600 hover:text-white transition flex gap-2 border-t border-[#3D3D3D]">
-                                👑 Transférer propriété
+                                {t.members_transfer}
                             </button>
                         )}
 
-                        {/* Expulser */}
                         <button onClick={() => handleAction("kick", member.user_id)} className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
-                            🚪 Expulser
+                            {t.members_kick}
                         </button>
 
-                        {/* Ban temporaire */}
                         <button onClick={() => { setOpenMenuId(null); setBanModal({ userId: member.user_id, displayName: member.displayName }); }} className="w-full text-left px-3 py-2 text-orange-400 hover:bg-orange-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
-                            ⏳ Ban temporaire
+                            {t.members_temp_ban}
                         </button>
 
-                        {/* Ban permanent */}
                         <button onClick={() => handleAction("permban", member.user_id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-700 hover:text-white border-t border-[#3D3D3D] transition flex gap-2 font-semibold">
-                            🔨 Ban permanent
+                            {t.members_perm_ban}
                         </button>
                         
                     </div>
@@ -345,5 +342,6 @@ export default function MembersBar({ selectedServer, userStatus }: Props) {
         )}
       </div>
     </div>
+    </>
   );
 }

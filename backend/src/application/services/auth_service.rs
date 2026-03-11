@@ -1,7 +1,8 @@
 use crate::application::dto::apperror::AppError;
 use crate::application::dto::server_dto::{ServerItem, MemberItem}; // Ajoutez MemberItem
 use crate::application::dto::channel_dto::ChannelItem;
-use crate::domain::models::{channel, refresh_token, server_member, user, server_model};
+use crate::application::dto::auth_dto::BanInfo;
+use crate::domain::models::{channel, refresh_token, server_member, user, server_model, server_ban};
 use crate::domain::models::user::UserStatus;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::{SaltString, rand_core::OsRng};
@@ -260,7 +261,28 @@ pub async fn me(db: &DatabaseConnection, claims: Claims) -> Result<MeResponse, A
         .await
         .map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
-    // 6. Assemblage
+    // 7. Fetch active bans for this user (bans that happened while offline)
+    let raw_bans = server_ban::Entity::find()
+        .filter(server_ban::Column::UserId.eq(user.id))
+        .find_also_related(server_model::Entity)
+        .all(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    let now = chrono::Utc::now().naive_utc();
+    let pending_bans: Vec<BanInfo> = raw_bans
+        .into_iter()
+        .filter(|(ban, _)| ban.banned_until.is_none() || ban.banned_until.map(|t| t > now).unwrap_or(false))
+        .filter_map(|(ban, server_opt)| {
+            server_opt.map(|s| BanInfo {
+                server_id: s.id,
+                server_name: s.name,
+                banned_until: ban.banned_until.map(|t| t.to_string()),
+            })
+        })
+        .collect();
+
+    // 8. Assemblage
     let servers: Vec<ServerItem> = members_with_servers
         .into_iter()
         .filter_map(|(_member, server)| {
@@ -320,7 +342,8 @@ pub async fn me(db: &DatabaseConnection, claims: Claims) -> Result<MeResponse, A
         username: user.username,
         display_name: user.display_name,
         avatar_url: user.avatar_url,
-        servers
+        servers,
+        pending_bans,
     })
 }
 

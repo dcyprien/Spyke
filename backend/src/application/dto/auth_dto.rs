@@ -2,6 +2,13 @@ use serde::{ Deserialize, Serialize };
 use crate::application::dto::server_dto::ServerItem;
 use uuid::Uuid;
 
+#[derive(Debug, Serialize)]
+pub struct BanInfo {
+    pub server_id: i32,
+    pub server_name: String,
+    pub banned_until: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SignupRequest {
     pub username: String,
@@ -55,4 +62,5 @@ pub struct MeResponse {
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
     pub servers: Vec<ServerItem>,
+    pub pending_bans: Vec<BanInfo>,
 }
