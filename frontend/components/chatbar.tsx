@@ -57,7 +57,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab }
       });
       if (res.ok) {
         const newServer = await res.json();
-        addServer(newServer);
+        await refreshUserData();
         setShowCreateModal(false);
         setServerName("");
         setServerDescription("");
@@ -367,13 +367,13 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab }
                   <span className="font-bold truncate">{server.name}</span>
                 </div>
                 {/* ID affiché au survol pour aider le copain */}
-                <span title={`ID: ${server.id} | Code: ${server.invitcode}`} className="text-[10px] text-gray-500 mr-2 opacity-0 group-hover:opacity-100 cursor-help">ℹ️</span>
+                <span title={`ID: ${server.id} | Code: ${server.invitcode}`} className="text-[10px] text-gray-500 mr-2 md:opacity-0 md:group-hover:opacity-100 cursor-help">ℹ️</span>
 
                 {/* LOGIQUE BOUTONS : SUPPRIMER vs QUITTER */}
                 {user?.id === server.owner_id ? (
                     <button 
                         onClick={(e) => { e.stopPropagation(); handleDeleteServer(server.id); }} 
-                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 hover:bg-white/10 p-1 rounded transition-all"
+                        className="md:opacity-0 md:group-hover:opacity-100 text-red-400 hover:text-red-500 hover:bg-white/10 p-1 rounded transition-all"
                         title="Supprimer le serveur"
                     >
                         🗑️
@@ -381,7 +381,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab }
                 ) : (
                     <button 
                         onClick={(e) => { e.stopPropagation(); handleLeaveServer(server.id); }} 
-                        className="opacity-0 group-hover:opacity-100 text-yellow-400 hover:text-yellow-500 hover:bg-white/10 p-1 rounded transition-all text-xs font-bold"
+                        className="md:opacity-0 md:group-hover:opacity-100 text-yellow-400 hover:text-yellow-500 hover:bg-white/10 p-1 rounded transition-all text-xs font-bold"
                         title="Quitter le serveur"
                     >
                         🚪
@@ -427,8 +427,8 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab }
                           </span>
                       )}
 
-                      {/* BOUTONS ACTIONS (Cachés par défaut, visibles au survol) */}
-                      <div className="flex items-center opacity-0 group-hover/chan:opacity-100 transition-opacity">
+                      {/* BOUTONS ACTIONS (Cachés par défaut, visibles au survol desktop / toujours visible mobile) */}
+                      <div className="flex items-center md:opacity-0 md:group-hover/chan:opacity-100 transition-opacity">
                          {/* CRAYON (Seulement si Owner/Admin & Pas en mode édition) */}
                          {canEditChannel && editingChannelId !== chan.id && (
                              <button
