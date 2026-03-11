@@ -48,7 +48,7 @@ export default function MembersBar({ selectedServer, userStatus, mobileTab }: Pr
   const statusColor = (status?: string) => {
     switch ((status || "").toLowerCase()) {
       case "online":    return "#22c55e"; // vert
-      case "offline":   return "#ef4444"; // rouge
+      case "offline":   return "#6b7280"; // gris
       case "invisible": return "#6b7280"; // gris (paraît hors-ligne pour les autres)
       default: return "#6b7280";
     }
