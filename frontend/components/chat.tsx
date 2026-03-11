@@ -5,6 +5,11 @@ import { Server, Channel } from "./chatbar";
 import { useAuth } from "../app/context";
 import { useLang } from "../app/langContext";
 
+type Reaction = {
+  emoji: string;
+  userIds: string[];
+};
+
 type Message = {
   id: string; 
   author: string;
@@ -13,7 +18,10 @@ type Message = {
   time: string;
   serverId: number; 
   channelId: string;
+  reactions: Reaction[];
 };
+
+const REACTION_EMOJIS = ["👍", "👎", "😊", "😢", "❤️", "😂"];
 
 type Props = {
   selectedServer?: Server | null;
@@ -33,6 +41,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
   
   // États UI
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
 
   // --- NOUVEAUX ÉTATS POUR L'ÉDITION ---
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -46,9 +55,9 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
 
   const emojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "❤️", "🔥", "👍", "✨"];
 
-  // Fermer le menu si on clique ailleurs
+  // Fermer le menu / reaction picker si on clique ailleurs
   useEffect(() => {
-    const handleClickOutside = () => setOpenMenuId(null);
+    const handleClickOutside = () => { setOpenMenuId(null); setReactionPickerId(null); };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
@@ -83,6 +92,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
                     time: new Date(msg.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
                     serverId: msg.server_id,
                     channelId: msg.channel_id,
+                    reactions: (msg.reactions || []).map((r: any) => ({ emoji: r.emoji, userIds: r.user_ids || [] })),
                 }));
                 setMessages(history);
             }
@@ -116,7 +126,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
                             content: data.content,
                             time: new Date(data.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
                             serverId: data.server_id,
-                            channelId: data.channel_id
+                            channelId: data.channel_id,
+                            reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
                     }
@@ -139,7 +150,37 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
                         }));
                     }
                     break;
-                // -------------------------------------
+
+                case "REACTION_ADD":
+                    if (String(data.channel_id) === String(selectedChannel.id)) {
+                        setMessages((prev) => prev.map(m => {
+                            if (String(m.id) !== String(data.message_id)) return m;
+                            const existing = m.reactions.find(r => r.emoji === data.emoji);
+                            if (existing) {
+                                if (existing.userIds.includes(data.user_id)) return m; // optimistic already applied
+                                return { ...m, reactions: m.reactions.map(r => r.emoji === data.emoji ? { ...r, userIds: [...r.userIds, data.user_id] } : r) };
+                            }
+                            return { ...m, reactions: [...m.reactions, { emoji: data.emoji, userIds: [data.user_id] }] };
+                        }));
+                    }
+                    break;
+
+                case "REACTION_REMOVE":
+                    if (String(data.channel_id) === String(selectedChannel.id)) {
+                        setMessages((prev) => prev.map(m => {
+                            if (String(m.id) !== String(data.message_id)) return m;
+                            const existing = m.reactions.find(r => r.emoji === data.emoji);
+                            if (!existing) return m;
+                            const updated = existing.userIds.filter((id: string) => id !== data.user_id);
+                            return {
+                                ...m,
+                                reactions: updated.length === 0
+                                    ? m.reactions.filter(r => r.emoji !== data.emoji)
+                                    : m.reactions.map(r => r.emoji === data.emoji ? { ...r, userIds: updated } : r)
+                            };
+                        }));
+                    }
+                    break;
 
                 case "typing_start":
                     if (data.username !== user?.username && String(data.channel_id) === String(selectedChannel.id)) {
@@ -242,6 +283,40 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
   };
   // -----------------------------------
 
+  const toggleReaction = async (msgId: string, emoji: string) => {
+    if (!user) return;
+    // Optimistic update
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      const existing = m.reactions.find(r => r.emoji === emoji);
+      let newReactions: Reaction[];
+      if (existing) {
+        const hasReacted = existing.userIds.includes(user.id);
+        if (hasReacted) {
+          const updated = existing.userIds.filter(id => id !== user.id);
+          newReactions = updated.length === 0
+            ? m.reactions.filter(r => r.emoji !== emoji)
+            : m.reactions.map(r => r.emoji === emoji ? { ...r, userIds: updated } : r);
+        } else {
+          newReactions = m.reactions.map(r => r.emoji === emoji ? { ...r, userIds: [...r.userIds, user.id] } : r);
+        }
+      } else {
+        newReactions = [...m.reactions, { emoji, userIds: [user.id] }];
+      }
+      return { ...m, reactions: newReactions };
+    }));
+    setReactionPickerId(null);
+    // Persist to backend (WebSocket will sync other users)
+    const token = localStorage.getItem("access_token");
+    try {
+      await fetch(`http://localhost:3000/messages/${msgId}/reactions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ emoji }),
+      });
+    } catch (e) { console.error(e); }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setMessage(val);
@@ -324,7 +399,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
               </div>
 
               {/* Bulle Message : MODE NORMAL vs MODE ÉDITION */}
-              <div className="bg-dark-navy text-white px-4 py-2 rounded-lg border border-white/5 break-words relative pr-10">
+              <div className="bg-dark-navy text-white px-4 py-2 rounded-lg border border-white/5 break-words relative pr-10 pb-2">
                 
                 {/* --- CONTENU DU MESSAGE OU INPUT D'EDITION --- */}
                 {editingMessageId === msg.id ? (
@@ -358,11 +433,66 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
                         onClick={(e) => {
                             e.preventDefault(); e.nativeEvent.stopImmediatePropagation(); e.stopPropagation();
                             setOpenMenuId(prev => prev === msg.id ? null : msg.id);
+                            setReactionPickerId(null);
                         }}
                         className={`absolute top-2 right-2 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition ${openMenuId === msg.id ? "opacity-100 bg-white/10" : "opacity-0 group-hover:opacity-100"}`}
                     >
                         ⋮
                     </button>
+                )}
+
+                {/* --- BOUTON RÉACTION (Caché si mode édition) --- */}
+                {editingMessageId !== msg.id && (
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault(); e.nativeEvent.stopImmediatePropagation(); e.stopPropagation();
+                            setReactionPickerId(prev => prev === msg.id ? null : msg.id);
+                            setOpenMenuId(null);
+                        }}
+                        className={`absolute bottom-2 right-2 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition text-xs ${reactionPickerId === msg.id ? "opacity-100 bg-white/10" : "opacity-0 group-hover:opacity-100"}`}
+                    >
+                        😊
+                    </button>
+                )}
+
+                {/* --- PICKER DE RÉACTIONS --- */}
+                {reactionPickerId === msg.id && (
+                    <div
+                        onClick={(e) => { e.nativeEvent.stopImmediatePropagation(); e.stopPropagation(); }}
+                        className="absolute bottom-10 right-0 bg-[#0F0F1A] border border-gray-700 rounded-full shadow-xl z-50 flex items-center gap-1 px-2 py-1"
+                    >
+                        {REACTION_EMOJIS.map(emoji => (
+                            <button
+                                key={emoji}
+                                onClick={() => toggleReaction(msg.id, emoji)}
+                                className={`text-lg hover:scale-125 transition-transform rounded-full w-8 h-8 flex items-center justify-center hover:bg-white/10 ${
+                                    msg.reactions.find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
+                                }`}
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* --- RÉACTIONS AFFICHÉES --- */}
+                {msg.reactions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                        {msg.reactions.map(r => (
+                            <button
+                                key={r.emoji}
+                                onClick={(e) => { e.nativeEvent.stopImmediatePropagation(); e.stopPropagation(); toggleReaction(msg.id, r.emoji); }}
+                                className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition hover:scale-105 ${
+                                    r.userIds.includes(user?.id ?? "")
+                                        ? "border-blue-500 bg-blue-500/20 text-white"
+                                        : "border-gray-700 bg-white/5 text-gray-300 hover:border-gray-500"
+                                }`}
+                            >
+                                <span>{r.emoji}</span>
+                                <span className="font-semibold">{r.userIds.length}</span>
+                            </button>
+                        ))}
+                    </div>
                 )}
 
                 {/* --- MENU DEROULANT --- */}
