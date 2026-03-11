@@ -90,7 +90,7 @@ pub async fn send_dm(
     db: &DatabaseConnection, 
     tx: &broadcast::Sender<String>, 
     claims: Claims, 
-    dm_id: Uuid, 
+    dm_id: Uuid,
     req: SendMessageRequest
 ) -> Result<MessageItem, AppError> {
 

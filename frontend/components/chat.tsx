@@ -19,9 +19,10 @@ type Props = {
   selectedServer?: Server | null;
   selectedChannel?: Channel | null;
   mobileTab?: string;
+  activeDMUser?: { id: string; name: string } | null; // <-- AJOUT
 };
 
-export default function Chat({ selectedServer, selectedChannel, mobileTab }: Props) {
+export default function Chat({ selectedServer, selectedChannel, mobileTab, activeDMUser }: Props) {
   const { user, socket } = useAuth();
   const { t } = useLang();
   
@@ -65,15 +66,28 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
 
   // CHARGEMENT INITIAL
   useEffect(() => {
-    if (!selectedChannel) return;
+    // Si ni channel ni DM sélectionné, on arrête
+    if (!selectedChannel && !activeDMUser) {
+        setMessages([]);
+        return;
+    }
 
     const fetchMessages = async () => {
         const token = localStorage.getItem("access_token");
         try {
-            const res = await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (res.ok) {
+            let res;
+            if (selectedChannel) {
+                res = await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+            } else if (activeDMUser) {
+                // ATTENTION: Remplacez l'URL par l'endpoint réel de vos DMs dans votre backend
+                res = await fetch(`http://localhost:3000/dms/${activeDMUser.id}/messages`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+            }
+
+            if (res && res.ok) {
                 const data = await res.json();
                 const history = data.message_list.map((msg: any) => ({
                     id: String(msg.id),
@@ -90,7 +104,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
     };
     fetchMessages();
     setEditingMessageId(null); // Reset edit si on change de channel
-  }, [selectedChannel]);
+  }, [selectedChannel, activeDMUser]); // <-- Mettre à jour les dépendances
 
 
   // ÉCOUTE DU WEBSOCKET
@@ -167,23 +181,32 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
 
 
   const sendMessage = async () => {
-    if (!message.trim() || !selectedServer || !selectedChannel) return;
+    // On bloque si on n'a ni channel ni DM
+    if (!message.trim() || (!selectedChannel && !activeDMUser)) return;
 
     const token = localStorage.getItem("access_token");
     const contentToSend = message;
     setMessage(""); 
 
     try {
-        await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-            body: JSON.stringify({ server_id: selectedServer.id, content: contentToSend })
-        });
-        setMessage(""); 
+        if (selectedChannel && selectedServer) {
+            await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ server_id: selectedServer.id, content: contentToSend })
+            });
+            if (socket){
+                socket.send(JSON.stringify({ type: "typing_stop", server_id: selectedServer.id, channel_id: selectedChannel.id }));
+            }
+        } else if (activeDMUser) {
+            // ATTENTION: Endpoint DM à adapter selon votre backend
+            await fetch(`http://localhost:3000/dms/${activeDMUser.id}/messages`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ content: contentToSend })
+            });
+        }
     } catch (e) { console.error(e); }
-    if (socket){
-        socket.send(JSON.stringify({ type: "typing_stop", server_id: selectedServer.id, channel_id: selectedChannel.id }));
-    }
   };
 
   const deleteMessage = async (msgId: string) => {
@@ -296,17 +319,21 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
       md:ml-64 lg:mr-64
       ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
     `}>
-      {/* Header (Inchangé) */}
+      {/* Header */}
       <div className="py-3 border-b border-white/10 mb-4 flex items-center justify-center">
         <h3 className="text-white font-bold text-lg">
-          {selectedChannel ? `# ${selectedChannel.name}` : t.chat_select_channel}
+          {selectedChannel 
+            ? `# ${selectedChannel.name}` 
+            : activeDMUser 
+              ? `💬 Message privé avec ${activeDMUser.name}` 
+              : t.chat_select_channel}
         </h3>
-        {selectedServer && <span className="text-blue-gray text-xs bg-dark-navy px-2 py-1 rounded">{selectedServer.name}</span>}
+        {selectedServer && <span className="text-blue-gray text-xs bg-dark-navy px-2 py-1 rounded ml-2">{selectedServer.name}</span>}
       </div>
 
       {/* Historique */}
       <div ref={messagesRef} onScroll={handleScroll} className="flex-1 space-y-4 mb-4 overflow-y-auto custom-scrollbar px-2">
-        {!selectedChannel ? (
+        {!selectedChannel && !activeDMUser ? (
            <div className="text-center text-blue-gray mt-10">{t.chat_select_channel}</div>
         ) : messages.length === 0 ? (
           <div className="text-center text-blue-gray py-8 italic">{t.chat_no_messages}</div>
@@ -419,7 +446,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
         <div className="relative">
           <button 
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            disabled={!selectedChannel}
+            disabled={!selectedChannel && !activeDMUser}
             className="p-2 rounded-lg bg-dark-navy hover:bg-navy-deep text-xl disabled:opacity-30 transition"
           >
             😊
@@ -444,13 +471,19 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
           value={message}
           onChange={handleInputChange}
           onKeyDown={(e) => { if(e.key === "Enter") { sendMessage(); } }}
-          placeholder={selectedChannel ? `${t.chat_send_placeholder} # ${selectedChannel.name}` : "..."}
-          disabled={!selectedChannel}
+          placeholder={
+            selectedChannel 
+              ? `${t.chat_send_placeholder} # ${selectedChannel.name}` 
+              : activeDMUser 
+                ? `Envoyer un message à ${activeDMUser.name}...` 
+                : "..."
+          }
+          disabled={!selectedChannel && !activeDMUser}
           className="flex-1 min-w-0 bg-dark-navy text-white px-3 py-2 rounded-lg outline-none border border-white/10 focus:border-cyan disabled:opacity-30 text-sm"
         />
         <button
           onClick={sendMessage}
-          disabled={!selectedChannel}
+          disabled={!selectedChannel && !activeDMUser}
           className="bg-cyan hover:bg-blue-mid text-white px-3 sm:px-5 py-2 rounded-lg font-bold disabled:opacity-30 transition shadow-lg flex-shrink-0 flex items-center gap-1 text-sm"
         >
           <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -27,9 +27,10 @@ interface Props {
   userStatus?: string;
   selectedChannel?: any;
   mobileTab?: string;
+  onStartDM?: (userId: string, username: string) => void; // <-- AJOUT ICI
 }
 
-export default function MembersBar({ selectedServer, userStatus, mobileTab }: Props) {
+export default function MembersBar({ selectedServer, userStatus, selectedChannel, mobileTab, onStartDM }: Props) {
   const { user, servers, refreshUserData } = useAuth();
   const { t } = useLang();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -303,6 +304,19 @@ export default function MembersBar({ selectedServer, userStatus, mobileTab }: Pr
                 {openMenuId === member.id && (
                     <div className="absolute right-8 top-8 w-48 bg-[#181825] rounded shadow-xl border border-[#3D3D3D] z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100">
                         
+                        {/* --- NOUVEAU BOUTON MESSAGE PRIVÉ --- */}
+                        {!isMe && (
+                            <button 
+                                onClick={() => {
+                                    if (onStartDM) onStartDM(member.user_id, member.displayName);
+                                    setOpenMenuId(null);
+                                }} 
+                                className="w-full text-left px-3 py-2 text-blue-400 hover:bg-blue-600 hover:text-white transition flex gap-2 border-b border-[#3D3D3D]"
+                            >
+                                💬 Message Privé
+                            </button>
+                        )}
+
                         {/* Gestion Rôle Admin/Membre */}
                         {currentUserRole === "Owner" && member.role === "Member" && (
                             <button onClick={() => handleAction("promote", member.user_id)} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-blue-600 hover:text-white transition flex gap-2">

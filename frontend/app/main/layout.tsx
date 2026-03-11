@@ -19,7 +19,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
 
-  // Si on est banni/expuls\u00e9 du serveur actuellement s\u00e9lectionn\u00e9, le d\u00e9s\u00e9lectionner
+  // NOUVEAUX ÉTATS POUR GÉRER L'ONGLET ET LE DM
+  const [activeTab, setActiveTab] = useState<"servers" | "dms">("servers");
+  const [activeDMUser, setActiveDMUser] = useState<{ id: string; name: string } | null>(null);
+
+  // Si on est banni/expulsé du serveur actuellement sélectionné, le désélectionner
   useEffect(() => {
     if (banNotification && selectedServer && selectedServer.id === banNotification.serverId) {
       setSelectedServer(null);
@@ -36,17 +40,28 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const handleServerSelect = (server: Server) => {
     setSelectedServer(server);
     setSelectedChannel(null); // On reset le salon pour forcer l'utilisateur à en choisir un
+    setActiveDMUser(null);    // On quitte le mode DM
+    setActiveTab("servers");  // On s'assure d'afficher les serveurs
   };
 
   // Action : Quand on clique sur un salon
   const handleChannelSelect = (channel: Channel) => {
     setSelectedChannel(channel);
+    setActiveDMUser(null);    // On quitte le mode DM
     // Si on a un salon mais pas de serveur sélectionné (ou mauvais serveur), 
     // il faut s'assurer que selectedServer est bien défini pour la MembersBar
     if (channel.server_id && (!selectedServer || selectedServer.id !== channel.server_id)) {
       // Ici, on part du principe que ton objet Channel contient le server_id
       setSelectedServer({ id: channel.server_id } as Server);
     }
+  };
+
+  // NOUVELLE ACTION : Démarrer un message privé depuis MembersBar
+  const handleStartDM = (userId: string, username: string) => {
+    setSelectedServer(null);
+    setSelectedChannel(null);
+    setActiveTab("dms");
+    setActiveDMUser({ id: userId, name: username });
   };
 
   return (
@@ -76,19 +91,23 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       
       <ChatBar 
         onServerSelect={handleServerSelect} 
-        onChannelSelect={handleChannelSelect} // Utilise la nouvelle fonction
-        username={username} 
+        onChannelSelect={handleChannelSelect} 
+        activeTab={activeTab} // <-- AJOUT
+        setActiveTab={setActiveTab} // <-- AJOUT
+        // username={username} // Si vous aviez cela, gardez-le
       />
       
       <MembersBar 
         userStatus={userStatus} 
         selectedServer={selectedServer} 
-        selectedChannel={selectedChannel} // Prop cruciale
+        selectedChannel={selectedChannel} 
+        onStartDM={handleStartDM} // <-- AJOUT : Passe la fonction à MembersBar
       />
 
       <Chat 
         selectedServer={selectedServer} 
         selectedChannel={selectedChannel} 
+        activeDMUser={activeDMUser}
       />
       
       {children}
