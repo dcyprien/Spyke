@@ -12,7 +12,7 @@ export default function LoginForm({ switchToRegister }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const { t } = useLang();
-  const { refreshUserData } = useAuth(); 
+  const { refreshUserData, connectWs } = useAuth(); 
 
  const handleSubmit = (e: React.FormEvent) => {
   e.preventDefault();
@@ -48,7 +48,8 @@ export default function LoginForm({ switchToRegister }: Props) {
         localStorage.setItem("username", data.username);
       }
 
-      await refreshUserData()
+      await refreshUserData();
+      connectWs(); // <-- Reconnecte le WebSocket pour lui passer le nouveau token
 
       router.push("/main");
     })
