@@ -401,8 +401,17 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
         )}
       </div>
 
+      {/* Indicateur de frappe */}
+      {typingUsers.length > 0 && (
+        <div className="max-w-xl mx-auto w-full px-2 text-xs text-cyan italic mb-1">
+          {typingUsers.length === 1 
+            ? `${typingUsers[0]} est en train d'écrire...` 
+            : `${typingUsers.join(", ")} sont en train d'écrire...`}
+        </div>
+      )}
+
       {/* Input de saisie principal (Inchangé) */}
-      <div className="w-full flex items-center gap-1 sm:gap-2 pb-4 relative min-w-0">
+      <div className="max-w-xl mx-auto w-full flex items-center gap-2 pb-6 relative">
           {/* ... emoji picker ... */}
          {/* ... input ... */}
          {/* Je ne remets pas tout le code bas de page car il ne change pas, 

@@ -15,7 +15,7 @@ const manualOptions: { key: "online" | "invisible"; label: string; color: string
 
 const dotColor: Record<UserStatus, string> = {
   online:    "bg-green",
-  offline:   "bg-red",
+  offline:   "bg-grey-light",
   invisible: "bg-grey-light",
 };
 
@@ -166,7 +166,6 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
             <h2 className="text-white text-xl font-bold">{username || "User"}</h2>
             <span className={`flex items-center gap-2 text-sm font-medium px-3 py-1 rounded-full border ${
               status === "online" ? "border-green-500 text-green-400 bg-green-500/10" :
-              status === "offline" ? "border-red-500 text-red-400 bg-red-500/10" :
               "border-gray-500 text-gray-400 bg-gray-500/10"
             }`}>
               <span className={`w-2 h-2 rounded-full ${dotColor[status]}`} />
@@ -203,7 +202,7 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
           <div className="w-full max-w-sm mt-auto">
             <button
               onClick={handleSignOut}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 font-semibold hover:bg-red-600 hover:text-white transition"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-500/30 bg-gray-500/10 text-gray-400 font-semibold hover:bg-gray-600 hover:text-white transition"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

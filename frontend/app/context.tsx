@@ -17,8 +17,8 @@ interface AuthState {
   servers: Server[];
   isLoading: boolean;
   socket: WebSocket | null;
-  banNotifications: { message: string; serverId: number }[];
-  dismissBanNotification: () => void;
+  banNotification: { message: string; serverId: number } | null;
+  clearBanNotification: () => void;
   addServer: (server: Server) => void;
   setServers: (servers: Server[]) => void; 
   logout: () => void;
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [servers, setServers] = useState<Server[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [banNotifications, setBanNotifications] = useState<{ message: string; serverId: number }[]>([]);
+  const [banNotification, setBanNotification] = useState<{ message: string; serverId: number } | null>(null);
 
   const { t } = useLang();
   const tRef = useRef(t);
@@ -43,16 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Ref pour accéder à l'état user courant dans le callback WS sans le recréer
   const userRef = { current: user };
-  const dismissBanNotification = () => setBanNotifications(prev => prev.slice(1));
-
-  // Helper to push a notification into the queue (deduplicated by serverId)
-  const pushBanNotification = (notif: { message: string; serverId: number }) => {
-    setBanNotifications(prev => {
-      if (prev.some(n => n.serverId === notif.serverId && n.message === notif.message)) return prev;
-      return [...prev, notif];
-    });
-  };
-
+  const clearBanNotification = () => setBanNotification(null);
   // Ref stable pour lire le user_id courant depuis la closure WS (stale closure fix)
   const currentUserIdRef = useRef<string | null>(null);
 
@@ -89,27 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setServers(mappedServers);
 
         // Show notifications for bans that happened while offline
-        if (data.pending_bans && data.pending_bans.length > 0) {
-          for (const ban of data.pending_bans) {
-            let msg: string;
-            if (!ban.banned_until) {
-              msg = tRef.current.ban_offline_perm(ban.server_name);
-            } else {
-              const until = new Date(ban.banned_until);
-              const diffSecs = Math.round((until.getTime() - Date.now()) / 1000);
-              if (diffSecs <= 15) {
-                msg = tRef.current.ban_offline_kicked(ban.server_name);
-              } else {
-                const days = Math.floor(diffSecs / 86400);
-                const hours = Math.floor(diffSecs / 3600);
-                if (days >= 1) msg = tRef.current.ban_offline_days(ban.server_name, days);
-                else if (hours >= 1) msg = tRef.current.ban_offline_hours(ban.server_name, hours);
-                else msg = tRef.current.ban_offline_minutes(ban.server_name, Math.ceil(diffSecs / 60));
-              }
-            }
-            pushBanNotification({ message: msg, serverId: ban.server_id });
-          }
-        }
       } else {
         localStorage.removeItem("access_token");
       }
@@ -136,6 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const token = localStorage.getItem("access_token");
           if (token) {
               ws.send(JSON.stringify({ type: "auth", token: token }));
+          } else {
+              // Si aucun token n'est présent, on arrête le chargement (utilisateur déconnecté)
+              setIsLoading(false);
           }
       };
 
