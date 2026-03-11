@@ -8,6 +8,7 @@ mod m20260129_084245_create_servers;
 mod m20260129_092557_create_server_member;
 mod m20260309_143110_create_server_bans;
 mod m20260310_092241_create_direct_message;
+mod m20260311_000001_create_message_reactions;
 
 pub struct Migrator;
 
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260129_092557_create_server_member::Migration),
             Box::new(m20260309_143110_create_server_bans::Migration),
             Box::new(m20260310_092241_create_direct_message::Migration),
+            Box::new(m20260311_000001_create_message_reactions::Migration),
         ]
     }
 }

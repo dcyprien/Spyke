@@ -1,10 +1,11 @@
 use axum::http::StatusCode;
 use chrono::Utc;
+use std::collections::HashMap;
 use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, ActiveModelTrait, QueryOrder};
 use uuid::Uuid;
 use tokio::sync::broadcast;
 use serde_json::json;
-use crate::{application::dto::{apperror::AppError, message_dto::{GetMessagesResponse, MessageItem, SendMessageRequest, UpdateMessageRequest, UpdateMessageResponse}, token_dto::Claims}, domain::models::{channel, message, server_member::{self, MemberRole}, user, direct_message}};
+use crate::{application::dto::{apperror::AppError, message_dto::{GetMessagesResponse, MessageItem, ReactionItem, SendMessageRequest, ToggleReactionRequest, UpdateMessageRequest, UpdateMessageResponse}, token_dto::Claims}, domain::models::{channel, message, message_reaction, server_member::{self, MemberRole}, user, direct_message}};
 
 // 1. ADAPTATION DE SEND_MESSAGE
 pub async fn send_message(
@@ -78,11 +79,12 @@ pub async fn send_message(
         id: saved_msg.id,
         content: saved_msg.content,
         user_id: saved_msg.user_id,
-        author: user_info.username, // ✅ Ajout ici
+        author: user_info.username,
         server_id: saved_msg.server_id,
         channel_id: saved_msg.channel_id,
-        direct_message_id: saved_msg.direct_message, // ✅ Ajout du DM
+        direct_message_id: saved_msg.direct_message,
         created_at: saved_msg.created_at.into(),
+        reactions: vec![],
     })
 }
 
@@ -141,6 +143,7 @@ pub async fn send_dm(
         channel_id: None,
         direct_message_id: Some(dm_id),
         created_at: saved_msg.created_at.into(),
+        reactions: vec![],
     })
 }
 
@@ -171,12 +174,41 @@ pub async fn get_messages(db: &DatabaseConnection, claims: Claims, channel_id: U
         .await
         .map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
+    // Fetch reactions for all messages in this channel
+    let message_ids: Vec<Uuid> = messages.iter().map(|(m, _)| m.id).collect();
+    let all_reactions = if message_ids.is_empty() {
+        vec![]
+    } else {
+        message_reaction::Entity::find()
+            .filter(message_reaction::Column::MessageId.is_in(message_ids))
+            .all(db)
+            .await
+            .map_err(|e| AppError::InternalServerError(e.to_string()))?
+    };
+
+    // Group reactions by message_id -> emoji -> Vec<user_id>
+    let mut reactions_map: HashMap<Uuid, HashMap<String, Vec<String>>> = HashMap::new();
+    for r in all_reactions {
+        reactions_map
+            .entry(r.message_id)
+            .or_default()
+            .entry(r.emoji.clone())
+            .or_default()
+            .push(r.user_id.to_string());
+    }
+
     let message_list = messages.into_iter().map(|(msg, user_opt)| {
-        // user_opt est Option<user::Model> car il vient du LEFT JOIN
         let author_name = match user_opt {
             Some(u) => u.username,
-            None => "Utilisateur Inconnu".to_string() // Fallback si user supprimé
+            None => "Utilisateur Inconnu".to_string()
         };
+
+        let reactions = reactions_map
+            .remove(&msg.id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(emoji, user_ids)| ReactionItem { emoji, user_ids })
+            .collect();
 
         MessageItem {
             id: msg.id,
@@ -186,7 +218,8 @@ pub async fn get_messages(db: &DatabaseConnection, claims: Claims, channel_id: U
             server_id: msg.server_id,
             channel_id: msg.channel_id,
             direct_message_id: msg.direct_message,
-            created_at: msg.created_at.into(), 
+            created_at: msg.created_at.into(),
+            reactions,
         }
     }).collect();
 
@@ -329,7 +362,8 @@ pub async fn update_message(
             channel_id: updated_msg.channel_id,
             server_id: updated_msg.server_id,
             direct_message_id: updated_msg.direct_message,
-            created_at: updated_msg.created_at.into()
+            created_at: updated_msg.created_at.into(),
+            reactions: vec![],
         }
     })
 }
@@ -372,9 +406,70 @@ pub async fn get_direct_messages(db: &DatabaseConnection, claims: Claims, dm_id:
             server_id: msg.server_id,
             channel_id: msg.channel_id,
             direct_message_id: msg.direct_message,
-            created_at: msg.created_at.into(), 
+            created_at: msg.created_at.into(),
+            reactions: vec![],
         }
     }).collect();
 
     Ok(GetMessagesResponse { message_list })
+}
+
+pub async fn toggle_reaction(
+    db: &DatabaseConnection,
+    tx: &broadcast::Sender<String>,
+    claims: Claims,
+    message_id: Uuid,
+    req: ToggleReactionRequest,
+) -> Result<(), AppError> {
+    // Validate emoji is one of the 6 allowed
+    let allowed = ["\u{1F44D}", "\u{1F44E}", "\u{1F60A}", "\u{1F622}", "\u{2764}\u{FE0F}", "\u{1F602}"];
+    if !allowed.contains(&req.emoji.as_str()) {
+        return Err(AppError::BadRequest("Invalid emoji".to_string()));
+    }
+
+    // Look up the message (needed for server_id to route broadcast)
+    let msg = message::Entity::find_by_id(message_id)
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::NotFound("Message not found".to_string()))?;
+
+    // Check existing reaction
+    let existing = message_reaction::Entity::find()
+        .filter(message_reaction::Column::MessageId.eq(message_id))
+        .filter(message_reaction::Column::UserId.eq(claims.sub))
+        .filter(message_reaction::Column::Emoji.eq(req.emoji.clone()))
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    let action;
+    if let Some(reaction) = existing {
+        reaction.delete(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+        action = "REACTION_REMOVE";
+    } else {
+        let new_reaction = message_reaction::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            message_id: Set(message_id),
+            user_id: Set(claims.sub),
+            emoji: Set(req.emoji.clone()),
+            created_at: Set(Utc::now()),
+        };
+        new_reaction.insert(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+        action = "REACTION_ADD";
+    }
+
+    let ws_payload = json!({
+        "type": action,
+        "data": {
+            "message_id": message_id.to_string(),
+            "user_id": claims.sub.to_string(),
+            "emoji": req.emoji,
+            "server_id": msg.server_id,
+            "channel_id": msg.channel_id.map(|id| id.to_string()),
+        }
+    });
+    let _ = tx.send(ws_payload.to_string());
+
+    Ok(())
 }

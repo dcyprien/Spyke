@@ -1,5 +1,6 @@
 pub mod user;
 pub mod message;
+pub mod message_reaction;
 pub mod refresh_token;
 pub mod server_model;
 pub mod server_member;

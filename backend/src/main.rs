@@ -76,6 +76,7 @@ async fn main() {
                             .delete(message::delete_message)
                             .put(message::update_message)
                             .get(message::get_direct_messages))
+    .route("/messages/{id}/reactions", put(message::toggle_reaction))
     .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let cors = CorsLayer::new()

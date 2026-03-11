@@ -1,5 +1,5 @@
 use axum::{Json, http::StatusCode, response::IntoResponse, extract::{State, Path}};
-use crate::{AppState, application::{dto::message_dto::{SendMessageRequest, UpdateMessageRequest}, services::message_service}};
+use crate::{AppState, application::{dto::message_dto::{SendMessageRequest, ToggleReactionRequest, UpdateMessageRequest}, services::message_service}};
 use uuid::Uuid;
 use sea_orm::{EntityTrait}; 
 use crate::application::dto::token_dto::Claims;
@@ -58,6 +58,13 @@ pub async fn update_message(State(state): State<AppState>, claims: Claims, Path(
 pub async fn get_direct_messages(State(state): State<AppState>, claims: Claims, Path(dm_id): Path<Uuid>) -> impl IntoResponse {
     match message_service::get_direct_messages(&state.db, claims, dm_id).await {
         Ok(msgs) => (StatusCode::OK, Json(msgs)).into_response(),
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
+    }
+}
+
+pub async fn toggle_reaction(State(state): State<AppState>, claims: Claims, Path(message_id): Path<Uuid>, Json(payload): Json<ToggleReactionRequest>) -> impl IntoResponse {
+    match message_service::toggle_reaction(&state.db, &state.tx, claims, message_id, payload).await {
+        Ok(_) => StatusCode::OK.into_response(),
         Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
