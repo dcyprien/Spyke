@@ -399,7 +399,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
               </div>
 
               {/* Bulle Message : MODE NORMAL vs MODE ÉDITION */}
-              <div className="bg-dark-navy text-white px-4 py-2 rounded-lg border border-white/5 break-words relative pr-10 pb-2">
+              <div className="bg-dark-navy text-white px-4 py-2 rounded-lg border border-white/5 break-words relative pr-16 pb-2">
                 
                 {/* --- CONTENU DU MESSAGE OU INPUT D'EDITION --- */}
                 {editingMessageId === msg.id ? (
@@ -449,7 +449,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
                             setReactionPickerId(prev => prev === msg.id ? null : msg.id);
                             setOpenMenuId(null);
                         }}
-                        className={`absolute bottom-2 right-2 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition text-xs ${reactionPickerId === msg.id ? "opacity-100 bg-white/10" : "opacity-0 group-hover:opacity-100"}`}
+                        className={`absolute top-2 right-8 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition text-xs ${reactionPickerId === msg.id ? "opacity-100 bg-white/10" : "opacity-0 group-hover:opacity-100"}`}
                     >
                         😊
                     </button>
