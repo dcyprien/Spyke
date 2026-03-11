@@ -11,7 +11,7 @@ export default function LoginForm({ switchToRegister }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   
-  const { refreshUserData } = useAuth(); 
+  const { refreshUserData, connectWs } = useAuth(); 
 
  const handleSubmit = (e: React.FormEvent) => {
   e.preventDefault();
@@ -38,6 +38,7 @@ export default function LoginForm({ switchToRegister }: Props) {
       }
 
       localStorage.setItem("access_token", data.access_token);
+      connectWs();
 
       if (data.refresh_token) {
         localStorage.setItem("refresh_token", data.refresh_token);

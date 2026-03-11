@@ -171,12 +171,29 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
     setMessage(""); 
 
     try {
-        await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+        const res = await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ server_id: selectedServer.id, content: contentToSend })
         });
-        setMessage(""); 
+        
+        // AJOUT: Mise à jour immédiate de l'historique sans attendre un éventuel WebSocket
+        if (res.ok) {
+            const data = await res.json();
+            setMessages((prev) => {
+                if (prev.some(m => String(m.id) === String(data.id))) return prev;
+                const newMsg: Message = {
+                    id: String(data.id),
+                    author: data.author_username || user?.username || "Moi",
+                    author_id: data.user_id || user?.id || "",
+                    content: data.content,
+                    time: data.created_at ? new Date(data.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+                    serverId: data.server_id || selectedServer.id,
+                    channelId: data.channel_id || selectedChannel.id,
+                };
+                return [...prev, newMsg];
+            });
+        }
     } catch (e) { console.error(e); }
     if (socket){
         socket.send(JSON.stringify({ type: "typing_stop", server_id: selectedServer.id, channel_id: selectedChannel.id }));
@@ -394,12 +411,16 @@ export default function Chat({ selectedServer, selectedChannel }: Props) {
         )}
       </div>
 
-      {/* Input de saisie principal (Inchangé) */}
+      {/* Input de saisie principal */}
       <div className="max-w-xl mx-auto w-full flex items-center gap-2 pb-6 relative">
-          {/* ... emoji picker ... */}
-         {/* ... input ... */}
-         {/* Je ne remets pas tout le code bas de page car il ne change pas, 
-             référez-vous au code existant pour le return final de l'input et du bouton envoyer */}
+          
+        {/* AJOUT : Affichage des utilisateurs en train d'écrire */}
+        {typingUsers.length > 0 && (
+          <div className="absolute -top-6 left-2 text-xs text-blue-gray italic">
+            {typingUsers.join(", ")} {typingUsers.length === 1 ? "est en train d'écrire..." : "sont en train d'écrire..."}
+          </div>
+        )}
+        
         <div className="relative">
           <button 
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}

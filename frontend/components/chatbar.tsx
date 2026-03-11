@@ -30,6 +30,11 @@ type ServerBarProps = {
 export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBarProps) {
   const { servers, addServer, setServers, refreshUserData, user, socket } = useAuth(); // On récupère user et socket
   
+  // NOUVEAU: État pour gérer l'onglet actif
+  const [activeTab, setActiveTab] = useState<"servers" | "dms">("servers");
+  // NOUVEAU: État temporaire pour la liste des DMs (à relier au backend ensuite)
+  const [dms, setDms] = useState<any[]>([]);
+
   const [expandedServerId, setExpandedServerId] = useState<number | null>(null);
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
@@ -118,13 +123,15 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
             headers: { "Authorization": `Bearer ${token}` },
         });
         if (res.ok) {
-            setServers(servers.filter(s => s.id !== serverId));
+            await refreshUserData(); // Rafraîchit les données avec le backend
             if (selectedServerId === serverId) {
                 setSelectedServerId(null);
                 setSelectedChannelId(null);
                 onServerSelect?.(null);
                 onChannelSelect?.(null);
             }
+        } else {
+            alert("Erreur lors de la suppression du serveur.");
         }
     } catch (e) { console.error(e); }
   };
@@ -134,17 +141,19 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
     try {
         const token = localStorage.getItem("access_token");
         const res = await fetch(`http://localhost:3000/servers/${serverId}/leave`, {
-            method: "DELETE", // C'est souvent DELETE pour leave aussi, ou POST. Vérifiez votre routeur.
+            method: "DELETE", // ou POST selon votre API
             headers: { "Authorization": `Bearer ${token}` },
         });
         if (res.ok) {
-            setServers(servers.filter(s => s.id !== serverId));
+            await refreshUserData(); // Rafraîchit les données avec le backend
             if (selectedServerId === serverId) {
                 setSelectedServerId(null);
                 setSelectedChannelId(null);
                 onServerSelect?.(null);
                 onChannelSelect?.(null);
             }
+        } else {
+             alert("Erreur : impossible de quitter ce serveur.");
         }
     } catch (e) { console.error(e); }
   };
@@ -275,193 +284,218 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
   return (
     <div className="fixed top-16 h-[calc(100vh-4rem)] w-64 bg-[#001839] border-l border-[#3D3D3D] flex flex-col p-4 z-10 shadow-lg">
       
-      {/* --- ZONE CRÉATION / JOIN --- */}
-      <div className="mb-4 space-y-2">
-        <h2 className="text-white text-lg font-bold mb-2">Serveurs</h2>
-        
-        <button 
-            onClick={() => setShowCreateModal(true)} 
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition shadow-md"
+      {/* --- ONGLET NAVIGATION --- */}
+      <div className="flex bg-[#0F0F1A] rounded-lg p-1 mb-4 border border-[#3D3D3D]">
+        <button
+          onClick={() => setActiveTab("servers")}
+          className={`flex-1 py-1.5 text-sm font-bold rounded-md transition ${
+            activeTab === "servers" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
+          }`}
         >
-          Créer un Serveur
+          Serveurs
         </button>
-        
-        <button 
-            onClick={() => setShowJoinInput(!showJoinInput)} 
-            className="w-full py-2 bg-[#2A2A3D] hover:bg-[#3D3D5C] text-white rounded-lg font-medium transition border border-gray-600"
+        <button
+          onClick={() => setActiveTab("dms")}
+          className={`flex-1 py-1.5 text-sm font-bold rounded-md transition ${
+            activeTab === "dms" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
+          }`}
         >
-          Rejoindre un Serveur
+          DMs
         </button>
-
-        {showJoinInput && (
-          <div className="mt-2 flex flex-col gap-2 p-2 bg-[#1E1E2E] rounded border border-gray-700 animate-in fade-in slide-in-from-top-2">
-            <input 
-                type="number" 
-                value={joinServerId} 
-                onChange={(e) => setJoinServerId(e.target.value)} 
-                placeholder="ID du serveur" 
-                className="w-full p-2 rounded bg-[#0F0F1A] text-white text-sm outline-none border border-gray-600 focus:border-blue-500" 
-            />
-            <input 
-                type="number" 
-                value={joinCode} 
-                onChange={(e) => setJoinCode(e.target.value)} 
-                placeholder="Code invitation (4 chiffres)" 
-                className="w-full p-2 rounded bg-[#0F0F1A] text-white text-sm outline-none border border-gray-600 focus:border-blue-500" 
-            />
-            <button 
-                onClick={handleJoinServer} 
-                className="w-full bg-green-600 hover:bg-green-700 py-1.5 rounded text-white text-sm font-bold transition"
-            >
-                Confirmer
-            </button>
-          </div>
-        )}
       </div>
 
-      <hr className="border-[#3D3D3D] mb-4" />
+      {/* ========================================= */}
+      {/* VUE SERVEURS */}
+      {/* ========================================= */}
+      {activeTab === "servers" && (
+        <>
+          {/* --- ZONE CRÉATION / JOIN --- */}
+          <div className="mb-4 space-y-2">
+            <h2 className="text-white text-lg font-bold mb-2">Serveurs</h2>
+            
+            <button 
+                onClick={() => setShowCreateModal(true)} 
+                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition shadow-md"
+            >
+              Créer un Serveur
+            </button>
+            
+            <button 
+                onClick={() => setShowJoinInput(!showJoinInput)} 
+                className="w-full py-2 bg-[#2A2A3D] hover:bg-[#3D3D5C] text-white rounded-lg font-medium transition border border-gray-600"
+            >
+              Rejoindre un Serveur
+            </button>
 
-      {/* --- LISTE DES SERVEURS --- */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-gray-600">
-        {servers.map((server: Server) => {
-          const isExpanded = expandedServerId === server.id;
-          const serverChannels = server.channels || [];
-          
-          // Vérification visuelle basique : Est-ce que je suis l'owner ?
-          // (Pour une gestion Admin complète, il faudrait vérifier les rôles via l'API)
-          const canEditElement = user?.id === server.owner_id;
-
-          return (
-            <div key={server.id} className="group flex flex-col">
-              <div 
-                onClick={() => { 
-                  setSelectedServerId(server.id); 
-                  onServerSelect?.(server); 
-                }}
-                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border border-transparent ${selectedServerId === server.id ? "bg-blue-600 text-white shadow-md" : "bg-[#1E1E2E] text-gray-300 hover:bg-[#2A2A3D] hover:border-gray-600"}`}
-              >
-                <div className="flex items-center gap-2 overflow-hidden flex-1">
-                  <button 
-                    // MODIFICATION 1 : La flèche sélectionne AUSSI le serveur maintenant
-                    onClick={(e) => { 
-                        e.stopPropagation(); 
-                        setExpandedServerId(isExpanded ? null : server.id);
-                        // On force la sélection du serveur
-                        setSelectedServerId(server.id);
-                        onServerSelect?.(server);
-                    }}
-                    className="w-5 h-5 flex items-center justify-center hover:bg-white/20 rounded transition-transform text-xs"
-                    style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-                  >
-                    ▶
-                  </button>
-                  <span className="font-bold truncate">{server.name}</span>
-                </div>
-                {/* ID affiché au survol pour aider le copain */}
-                <span title={`ID: ${server.id} | Code: ${server.invitcode}`} className="text-[10px] text-gray-500 mr-2 opacity-0 group-hover:opacity-100 cursor-help">ℹ️</span>
-
-                {/* LOGIQUE BOUTONS : SUPPRIMER vs QUITTER */}
-                {user?.id === server.owner_id ? (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteServer(server.id); }} 
-                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 hover:bg-white/10 p-1 rounded transition-all"
-                        title="Supprimer le serveur"
-                    >
-                        🗑️
-                    </button>
-                ) : (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleLeaveServer(server.id); }} 
-                        className="opacity-0 group-hover:opacity-100 text-yellow-400 hover:text-yellow-500 hover:bg-white/10 p-1 rounded transition-all text-xs font-bold"
-                        title="Quitter le serveur"
-                    >
-                        🚪
-                    </button>
-                )}
+            {showJoinInput && (
+              <div className="mt-2 flex flex-col gap-2 p-2 bg-[#1E1E2E] rounded border border-gray-700 animate-in fade-in slide-in-from-top-2">
+                <input 
+                    type="number" 
+                    value={joinServerId} 
+                    onChange={(e) => setJoinServerId(e.target.value)} 
+                    placeholder="ID du serveur" 
+                    className="w-full p-2 rounded bg-[#0F0F1A] text-white text-sm outline-none border border-gray-600 focus:border-blue-500" 
+                />
+                <input 
+                    type="number" 
+                    value={joinCode} 
+                    onChange={(e) => setJoinCode(e.target.value)} 
+                    placeholder="Code invitation (4 chiffres)" 
+                    className="w-full p-2 rounded bg-[#0F0F1A] text-white text-sm outline-none border border-gray-600 focus:border-blue-500" 
+                />
+                <button 
+                    onClick={handleJoinServer} 
+                    className="w-full bg-green-600 hover:bg-green-700 py-1.5 rounded text-white text-sm font-bold transition"
+                >
+                    Confirmer
+                </button>
               </div>
+            )}
+          </div>
 
-              {/* LISTE DES CHANNELS */}
-              {isExpanded && (
-                <div className="mt-1 py-2 px-2 bg-[#0F0F1A] rounded-b-lg border-x border-b border-[#3D3D3D] space-y-1 ml-2 border-l-2 border-l-blue-600">
-                  {serverChannels.length === 0 && <p className="text-xs text-gray-500 text-center py-1">Aucun salon</p>}
-                  
-                  {serverChannels.map(chan => {
-                      
-                    // NOUVELLE LOGIQUE PERMISSION CRAYON
-                    // Owner OU Admin (si la liste admins est présente et contient mon ID)
-                    const isAdmin = server.admins?.includes(user?.id || "");
-                    const canEditChannel = (user?.id === server.owner_id) || isAdmin;
+          <hr className="border-[#3D3D3D] mb-4" />
 
-                    return (
-                        <div 
-                            key={chan.id} 
-                            onClick={() => { setSelectedChannelId(chan.id); onChannelSelect?.(chan); }}
-                            className={`flex items-center justify-between group/chan px-2 py-1.5 rounded cursor-pointer transition-colors ${selectedChannelId === chan.id ? "bg-blue-900/50 text-blue-200 border-l-2 border-blue-500" : "hover:bg-[#1E1E2E] text-gray-400 hover:text-gray-200 border-l-2 border-transparent"}`}
-                        >
-                      {/* NOM DU SALON OU INPUT D'EDITION */}
-                      {editingChannelId === chan.id ? (
-                          <input 
-                              autoFocus
-                              type="text" 
-                              value={editChannelName}
-                              onChange={(e) => setEditChannelName(e.target.value)}
-                              onClick={(e) => e.stopPropagation()} // Bloque la sélection du salon pendant l'écriture
-                              onKeyDown={(e) => {
-                                  if (e.key === "Enter") handleUpdateChannel(chan.id);
-                                  if (e.key === "Escape") cancelEditingChannel();
-                              }}
-                              className="w-full bg-black/50 text-white text-xs px-1 py-0.5 rounded border border-blue-500 outline-none"
-                          />
-                      ) : (
-                          <span className="text-sm font-medium flex items-center gap-1 truncate">
-                             <span className="text-gray-600">#</span> {chan.name}
-                          </span>
-                      )}
+          {/* --- LISTE DES SERVEURS --- */}
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-gray-600">
+            {servers.map((server: Server) => {
+              const isExpanded = expandedServerId === server.id;
+              const serverChannels = server.channels || [];
+              
+              // Vérification visuelle basique : Est-ce que je suis l'owner ?
+              // (Pour une gestion Admin complète, il faudrait vérifier les rôles via l'API)
+              const canEditElement = user?.id === server.owner_id;
 
-                      {/* BOUTONS ACTIONS (Cachés par défaut, visibles au survol) */}
-                      <div className="flex items-center opacity-0 group-hover/chan:opacity-100 transition-opacity">
-                         {/* CRAYON (Seulement si Owner/Admin & Pas en mode édition) */}
-                         {canEditChannel && editingChannelId !== chan.id && (
-                             <button
-                                onClick={(e) => startEditingChannel(chan, e)}
-                                className="text-gray-400 hover:text-white mr-1 p-0.5"
-                                title="Modifier"
-                             >
-                                ✏️
-                             </button>
-                         )}
-                                
-                         {/* CROIX (Delete) */}
-                         {editingChannelId !== chan.id ? (
-                            // MODIFICATION : On vérifie les droits avant d'afficher le bouton supprimer
-                            canEditChannel && (
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteChannel(chan.id); }} 
-                                    className="text-red-400 hover:text-red-500 text-xs px-1"
-                                    title="Supprimer"
-                                >
-                                    ✕
-                                </button>
-                            )
-                         ) : (
-                             // Boutons Validation pendant l'édition
-                             <>
-                                <button onClick={(e) => { e.stopPropagation(); handleUpdateChannel(chan.id); }} className="text-green-500 text-[10px] mr-1">✔</button>
-                                <button onClick={(e) => cancelEditingChannel(e)} className="text-red-500 text-[10px]">✘</button>
-                             </>
-                         )}
-                      </div>
+              return (
+                <div key={server.id} className="group flex flex-col">
+                  <div 
+                    onClick={() => { 
+                      setSelectedServerId(server.id); 
+                      onServerSelect?.(server); 
+                    }}
+                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border border-transparent ${selectedServerId === server.id ? "bg-blue-600 text-white shadow-md" : "bg-[#1E1E2E] text-gray-300 hover:bg-[#2A2A3D] hover:border-gray-600"}`}
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                      <button 
+                        // MODIFICATION 1 : La flèche sélectionne AUSSI le serveur maintenant
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setExpandedServerId(isExpanded ? null : server.id);
+                            // On force la sélection du serveur
+                            setSelectedServerId(server.id);
+                            onServerSelect?.(server);
+                        }}
+                        className="w-5 h-5 flex items-center justify-center hover:bg-white/20 rounded transition-transform text-xs"
+                        style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                      >
+                        ▶
+                      </button>
+                      <span className="font-bold truncate">{server.name}</span>
                     </div>
-                  );
-                })}
-                  
-                  <div className="pt-2 mt-1 border-t border-white/5 flex justify-center">
-                    {/* On réutilise la même logique kanEditChannel car souvent les droits sont les mêmes CRUD */}
-                    {((user?.id === server.owner_id) || (server.admins?.includes(user?.id || ""))) && (
+                    {/* ID affiché au survol pour aider le copain */}
+                    <span title={`ID: ${server.id} | Code: ${server.invitcode}`} className="text-[10px] text-gray-500 mr-2 opacity-0 group-hover:opacity-100 cursor-help">ℹ️</span>
+
+                    {/* LOGIQUE BOUTONS : SUPPRIMER vs QUITTER */}
+                    {user?.id === server.owner_id ? (
                         <button 
-                            onClick={() => handleCreateChannel(server.id)} 
-                            className="text-[10px] text-gray-400 hover:text-white uppercase font-bold tracking-wider hover:underline"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteServer(server.id); }} 
+                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 hover:bg-white/10 p-1 rounded transition-all"
+                            title="Supprimer le serveur"
                         >
+                            🗑️
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); handleLeaveServer(server.id); }} 
+                            className="opacity-0 group-hover:opacity-100 text-yellow-400 hover:text-yellow-500 hover:bg-white/10 p-1 rounded transition-all text-xs font-bold"
+                            title="Quitter le serveur"
+                        >
+                            🚪
+                        </button>
+                    )}
+                  </div>
+
+                  {/* LISTE DES CHANNELS */}
+                  {isExpanded && (
+                    <div className="mt-1 py-2 px-2 bg-[#0F0F1A] rounded-b-lg border-x border-b border-[#3D3D3D] space-y-1 ml-2 border-l-2 border-l-blue-600">
+                      {serverChannels.length === 0 && <p className="text-xs text-gray-500 text-center py-1">Aucun salon</p>}
+                      
+                      {serverChannels.map(chan => {
+                        
+                        // NOUVELLE LOGIQUE PERMISSION CRAYON
+                        // Owner OU Admin (si la liste admins est présente et contient mon ID)
+                        const isAdmin = server.admins?.includes(user?.id || "");
+                        const canEditChannel = (user?.id === server.owner_id) || isAdmin;
+
+                        return (
+                            <div 
+                                key={chan.id} 
+                                onClick={() => { setSelectedChannelId(chan.id); onChannelSelect?.(chan); }}
+                                className={`flex items-center justify-between group/chan px-2 py-1.5 rounded cursor-pointer transition-colors ${selectedChannelId === chan.id ? "bg-blue-900/50 text-blue-200 border-l-2 border-blue-500" : "hover:bg-[#1E1E2E] text-gray-400 hover:text-gray-200 border-l-2 border-transparent"}`}
+                            >
+                          {/* NOM DU SALON OU INPUT D'EDITION */}
+                          {editingChannelId === chan.id ? (
+                              <input 
+                                  autoFocus
+                                  type="text" 
+                                  value={editChannelName}
+                                  onChange={(e) => setEditChannelName(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()} // Bloque la sélection du salon pendant l'écriture
+                                  onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleUpdateChannel(chan.id);
+                                      if (e.key === "Escape") cancelEditingChannel();
+                                  }}
+                                  className="w-full bg-black/50 text-white text-xs px-1 py-0.5 rounded border border-blue-500 outline-none"
+                              />
+                          ) : (
+                              <span className="text-sm font-medium flex items-center gap-1 truncate">
+                                 <span className="text-gray-600">#</span> {chan.name}
+                          </span>
+                          )}
+
+                          {/* BOUTONS ACTIONS (Cachés par défaut, visibles au survol) */}
+                          <div className="flex items-center opacity-0 group-hover/chan:opacity-100 transition-opacity">
+                             {/* CRAYON (Seulement si Owner/Admin & Pas en mode édition) */}
+                             {canEditChannel && editingChannelId !== chan.id && (
+                                 <button
+                                    onClick={(e) => startEditingChannel(chan, e)}
+                                    className="text-gray-400 hover:text-white mr-1 p-0.5"
+                                    title="Modifier"
+                                 >
+                                    ✏️
+                                 </button>
+                             )}
+                                
+                             {/* CROIX (Delete) */}
+                             {editingChannelId !== chan.id ? (
+                                // MODIFICATION : On vérifie les droits avant d'afficher le bouton supprimer
+                                canEditChannel && (
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteChannel(chan.id); }} 
+                                        className="text-red-400 hover:text-red-500 text-xs px-1"
+                                        title="Supprimer"
+                                    >
+                                        ✕
+                                    </button>
+                                )
+                             ) : (
+                                 // Boutons Validation pendant l'édition
+                                 <>
+                                    <button onClick={(e) => { e.stopPropagation(); handleUpdateChannel(chan.id); }} className="text-green-500 text-[10px] mr-1">✔</button>
+                                    <button onClick={(e) => cancelEditingChannel(e)} className="text-red-500 text-[10px]">✘</button>
+                                 </>
+                             )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                      
+                      <div className="pt-2 mt-1 border-t border-white/5 flex justify-center">
+                        {/* On réutilise la même logique kanEditChannel car souvent les droits sont les mêmes CRUD */}
+                        {((user?.id === server.owner_id) || (server.admins?.includes(user?.id || ""))) && (
+                            <button 
+                                onClick={() => handleCreateChannel(server.id)} 
+                                className="text-[10px] text-gray-400 hover:text-white uppercase font-bold tracking-wider hover:underline"
+                            >
                         + Nouveau Salon
                         </button>
                     )}
@@ -472,7 +506,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect }: ServerBar
           );
         })}
       </div>
-
+      </>)}
       {/* MODAL CRÉATION */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
