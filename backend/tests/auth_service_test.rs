@@ -11,7 +11,7 @@ use backend::application::services::auth_service;
 use backend::application::dto::auth_dto::{SignupRequest, LoginRequest, RefreshRequest};
 use backend::application::dto::token_dto::Claims;
 use backend::application::dto::apperror::AppError; // Assurez-vous que l'import est correct
-use backend::domain::models::{user, refresh_token, server_member, server_model, channel};
+use backend::domain::models::{user, refresh_token, server_ban, server_member, server_model, channel};
 use backend::domain::models::user::UserStatus;
 use std::env;
 use std::sync::Mutex;
@@ -434,6 +434,8 @@ async fn test_me_success_complex_structure() {
                 Some(user::Model { id: user_id, username: "me_user".to_string(), password_hash: "h".to_string(), status: UserStatus::Online, display_name: None, avatar_url: None })
             )]
         ])
+        // 5. Find Bans (empty)
+        .append_query_results(vec![vec![] as Vec<(server_ban::Model, Option<server_model::Model>)>])
         .into_connection();
 
     let claims = Claims { sub: user_id, username: "u".to_string(), exp: 0, iat: 0 };
