@@ -15,12 +15,6 @@ pub struct ReactionItem {
     pub user_ids: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct ReactionItem {
-    pub emoji: String,
-    pub user_ids: Vec<String>,
-}
-
 #[derive(Debug, Serialize)]
 pub struct MessageItem {
     pub id: Uuid,

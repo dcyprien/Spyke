@@ -25,10 +25,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [activeTab, setActiveTab] = useState<"servers" | "dms">("servers");
   const [activeDMUser, setActiveDMUser] = useState<{ id: string; name: string } | null>(null);
 
-  // Si on est banni/expulsé du serveur actuellement sélectionné, le désélectionner
-  // NOUVEAUX ÉTATS POUR GÉRER L'ONGLET ET LE DM
-  const [activeTab, setActiveTab] = useState<"servers" | "dms">("servers");
-  const [activeDMUser, setActiveDMUser] = useState<{ id: string; name: string } | null>(null);
 
   // Si on est banni/expulsé du serveur actuellement sélectionné, le désélectionner
   useEffect(() => {
@@ -77,14 +73,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     }
     // Auto-switch to chat when a channel is picked on mobile
     setMobileTab("chat");
-  };
-
-  // NOUVELLE ACTION : Démarrer un message privé depuis MembersBar
-  const handleStartDM = (userId: string, username: string) => {
-    setSelectedServer(null);
-    setSelectedChannel(null);
-    setActiveTab("dms");
-    setActiveDMUser({ id: userId, name: username });
   };
 
   // NOUVELLE ACTION : Démarrer un message privé depuis MembersBar
