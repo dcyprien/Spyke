@@ -48,10 +48,20 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
   const [editContent, setEditContent] = useState("");
   // -------------------------------------
 
+  // --- ÉTATS GIF PICKER ---
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearch, setGifSearch] = useState("");
+  const [gifResults, setGifResults] = useState<{ id: string; url: string; preview: string }[]>([]);
+  const [gifLoading, setGifLoading] = useState(false);
+  // ------------------------
+
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScroll = useRef(true);
+  const gifPickerRef = useRef<HTMLDivElement | null>(null);
+  const gifBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [gifPickerPos, setGifPickerPos] = useState({ bottom: 0, right: 0 });
 
   const emojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "❤️", "🔥", "👍", "✨"];
 
@@ -61,6 +71,62 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
+
+  // Fermer le GIF picker si clic en dehors (mousedown pour éviter les conflits React)
+  useEffect(() => {
+    if (!showGifPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        gifPickerRef.current && !gifPickerRef.current.contains(e.target as Node) &&
+        gifBtnRef.current && !gifBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowGifPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showGifPicker]);
+
+  // Fetch GIFs (trending ou recherche)
+  const fetchGifs = async (query: string) => {
+    const apiKey = process.env.NEXT_PUBLIC_GIPHY_API_KEY;
+    setGifLoading(true);
+    try {
+      const endpoint = query.trim()
+        ? `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=24&rating=g`
+        : `https://api.giphy.com/v1/gifs/trending?api_key=${apiKey}&limit=24&rating=g`;
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const data = await res.json();
+        setGifResults(data.data.map((g: any) => ({
+          id: g.id,
+          url: g.images.fixed_height.url,
+          preview: g.images.fixed_height_small.url,
+        })));
+      }
+    } catch (e) { console.error(e); }
+    setGifLoading(false);
+  };
+
+  // Debounce recherche GIF
+  useEffect(() => {
+    if (!showGifPicker) return;
+    const timeout = setTimeout(() => fetchGifs(gifSearch), 350);
+    return () => clearTimeout(timeout);
+  }, [gifSearch, showGifPicker]);
+
+  const sendGif = async (gifUrl: string) => {
+    if (!selectedServer || !selectedChannel) return;
+    const token = localStorage.getItem("access_token");
+    setShowGifPicker(false);
+    try {
+      await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ server_id: selectedServer.id, content: gifUrl }),
+      });
+    } catch (e) { console.error(e); }
+  };
 
   // Bloque scroll body
   useEffect(() => {
@@ -365,6 +431,11 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
   }, [messages]);
 
 
+  const isGifUrl = (content: string) => {
+    const trimmed = content.trim();
+    return trimmed.startsWith("https://media") && trimmed.includes("giphy.com");
+  };
+
   return (
     <div className={`flex flex-col h-screen bg-[#001952]
       pt-16 pb-16 md:pt-20 md:pb-0 px-4
@@ -419,11 +490,15 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
                             <span className="text-gray-400">Entrée pour valider • Echap pour annuler</span>
                         </div>
                     </div>
+                ) : isGifUrl(msg.content) ? (
+                    <img
+                        src={msg.content.trim()}
+                        alt="GIF"
+                        className="max-w-full rounded-lg max-h-48 object-contain mt-1"
+                        loading="lazy"
+                    />
                 ) : (
-                    <>
-                        {msg.content} 
-                        {/* Indicateur (modifié) si besoin, mais pas stocké en DB dans cet exemple */}
-                    </>
+                    msg.content
                 )}
 
 
@@ -588,6 +663,98 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab }: Pro
           </svg>
           <span className="hidden sm:inline">{t.chat_send_btn}</span>
         </button>
+
+        {/* Bouton GIF + Picker */}
+        <div className="relative">
+          <button
+            ref={gifBtnRef}
+            onClick={() => {
+              if (gifBtnRef.current) {
+                const rect = gifBtnRef.current.getBoundingClientRect();
+                setGifPickerPos({
+                  bottom: window.innerHeight - rect.top + 8,
+                  right: window.innerWidth - rect.right,
+                });
+              }
+              setShowGifPicker(p => !p);
+              setShowEmojiPicker(false);
+            }}
+            disabled={!selectedChannel}
+            className="p-2 rounded-lg bg-dark-navy hover:bg-navy-deep text-white text-xs font-bold disabled:opacity-30 transition border border-white/10 h-10 px-3"
+          >
+            GIF
+          </button>
+        </div>
+
+        {/* GIF Picker — fixed pour éviter tout problème d'overflow parent */}
+        {showGifPicker && (
+          <div
+            ref={gifPickerRef}
+            className="fixed bg-[#0F0F1A] border border-gray-700 rounded-xl shadow-2xl z-[9999] flex flex-col overflow-hidden"
+            style={{
+              bottom: gifPickerPos.bottom,
+              right: gifPickerPos.right,
+              width: "min(380px, 92vw)",
+            }}
+          >
+            {/* Barre de recherche */}
+            <div className="p-3 border-b border-gray-700 flex items-center gap-2">
+              <span className="text-lg">🔍</span>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Rechercher un GIF..."
+                value={gifSearch}
+                onChange={e => setGifSearch(e.target.value)}
+                className="flex-1 bg-black/40 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan placeholder-gray-500"
+              />
+              <button
+                onClick={() => setShowGifPicker(false)}
+                className="text-gray-400 hover:text-white transition p-1 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Label tendances / résultats */}
+            <div className="px-3 pt-2 pb-1 text-xs text-gray-400 font-semibold uppercase tracking-wider">
+              {gifSearch.trim() ? `Résultats pour "${gifSearch}"` : "Tendances"}
+            </div>
+
+            {/* Grille de GIFs */}
+            <div className="overflow-y-auto" style={{ maxHeight: "260px" }}>
+              {gifLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-400 text-sm gap-2">
+                  <span className="animate-spin">⏳</span> Chargement...
+                </div>
+              ) : gifResults.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 text-sm">Aucun résultat</div>
+              ) : (
+                <div className="grid grid-cols-3 gap-1 p-2">
+                  {gifResults.map(gif => (
+                    <button
+                      key={gif.id}
+                      onClick={() => sendGif(gif.url)}
+                      className="rounded-md overflow-hidden hover:ring-2 hover:ring-blue-400 transition-all"
+                    >
+                      <img
+                        src={gif.preview}
+                        alt="gif"
+                        className="w-full h-20 object-cover"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Giphy */}
+            <div className="px-3 py-2 border-t border-gray-700 flex items-center justify-end">
+              <span className="text-[10px] text-gray-500">Powered by GIPHY</span>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
