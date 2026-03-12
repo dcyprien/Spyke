@@ -1,5 +1,5 @@
 # --- Étape 1 : La Forge (Build) ---
-FROM rust:1.75-slim as builder
+FROM rust:latest as builder
 
 WORKDIR /app
 
