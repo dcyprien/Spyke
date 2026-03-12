@@ -13,7 +13,7 @@ use backend::application::dto::server_dto::{
 };
 use backend::application::dto::token_dto::Claims;
 use backend::application::dto::apperror::AppError;
-use backend::domain::models::{server_model, server_member, channel, user};
+use backend::domain::models::{server_ban, server_model, server_member, channel, user};
 use backend::domain::models::server_member::MemberRole;
 use backend::domain::models::user::UserStatus;
 
@@ -140,9 +140,11 @@ async fn test_join_server_success_with_broadcast() {
         .append_query_results(vec![vec![server_model::Model {
             id: server_id, name: "S".to_string(), description: "D".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 9999
         }]])
-        // 2. Verif Not Member (Empty)
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Verif Not Member (Empty)
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
-        // 3. Insert Membership
+        // 4. Insert Membership
         .append_query_results(vec![vec![server_member::Model {
             id: Uuid::new_v4(), server_id, user_id, role: MemberRole::Member
         }]])
@@ -184,7 +186,9 @@ async fn test_join_server_wrong_code() {
         .append_query_results(vec![vec![server_model::Model {
             id: srv_id, name: "S".to_string(), description: "D".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234
         }]])
-        // 2. Not Member
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Not Member
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
         .into_connection();
 
@@ -467,7 +471,9 @@ async fn test_join_server_already_member() {
         .append_query_results(vec![vec![server_model::Model {
             id: srv_id, name: "S".to_string(), description: "D".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1111
         }]])
-        // 2. Check Existing Membership -> FOUND (Déjà membre)
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Check Existing Membership -> FOUND (Déjà membre)
         .append_query_results(vec![vec![server_member::Model {
             id: Uuid::new_v4(), server_id: srv_id, user_id, role: MemberRole::Member
         }]])
@@ -890,36 +896,36 @@ async fn test_join_server_db_errors() {
         .into_connection();
     assert!(matches!(server_service::join_server(&db1, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 340: Check Already Member
+    // Line 340: Ban Check Error
     let db2 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
         .append_query_errors(vec![DbErr::Custom("E2".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db2, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 359: Insert Member
+    // Line 359: Check Already Member Error
     let db3 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
-        .append_query_results(vec![vec![] as Vec<server_member::Model>])
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
         .append_query_errors(vec![DbErr::Custom("E3".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db3, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 366: Find User Info
+    // Line 366: Insert Member Error
     let db4 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
-        .append_query_results(vec![vec![server_member::Model{ id: Uuid::new_v4(), server_id: srv_id, user_id, role: MemberRole::Member }]])
         .append_query_errors(vec![DbErr::Custom("E4".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db4, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 394: Fetch Channels
+    // Line 380: Find User Info Error
     let db5 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
         .append_query_results(vec![vec![server_member::Model{ id: Uuid::new_v4(), server_id: srv_id, user_id, role: MemberRole::Member }]])
-        .append_query_results(vec![vec![user::Model{ id: user_id, username: "U".to_string(), display_name: None, avatar_url: None, password_hash: "".to_string(), status: UserStatus::Online }]])
         .append_query_errors(vec![DbErr::Custom("E5".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db5, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
