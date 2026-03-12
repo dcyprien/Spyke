@@ -1,11 +1,11 @@
 use axum::http::StatusCode;
 use chrono::Utc;
-use std::collections::HashMap;
-use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, ActiveModelTrait, QueryOrder};
+use sea_orm::{ sea_query::Expr, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, ActiveModelTrait, QueryOrder, Condition};
 use uuid::Uuid;
+use std::collections::HashMap;
 use tokio::sync::broadcast;
 use serde_json::json;
-use crate::{application::dto::{apperror::AppError, message_dto::{GetMessagesResponse, MessageItem, ReactionItem, SendMessageRequest, ToggleReactionRequest, UpdateMessageRequest, UpdateMessageResponse}, token_dto::Claims}, domain::models::{channel, message, message_reaction, server_member::{self, MemberRole}, user, direct_message}};
+use crate::{application::dto::{apperror::AppError, message_dto::{GetMessagesResponse, MessageItem, ReactionItem, SendMessageRequest, ToggleReactionRequest, UpdateMessageRequest, UpdateMessageResponse, GetDMSresponse, DmItem}, token_dto::Claims}, domain::models::{channel, message, message_reaction, server_member::{self, MemberRole}, user, direct_message}};
 
 // 1. ADAPTATION DE SEND_MESSAGE
 pub async fn send_message(
@@ -44,7 +44,7 @@ pub async fn send_message(
         server_id: Set(Some(req_server_id)),
         user_id: Set(claims.sub), 
         content: Set(req.content.clone()),
-        direct_message: Set(req.direct_message),
+        direct_message: Set(None),
         created_at: Set(Utc::now()), 
         ..Default::default()
     };
@@ -92,34 +92,69 @@ pub async fn send_dm(
     db: &DatabaseConnection, 
     tx: &broadcast::Sender<String>, 
     claims: Claims, 
-    dm_id: Uuid, 
+    target_user_id: Uuid,
     req: SendMessageRequest
 ) -> Result<MessageItem, AppError> {
 
     if req.content.trim().is_empty() { return Err(AppError::BadRequest("Empty content".to_string())); }
 
-    // 1. Insertion DB (Sans server ni channel, mais avec direct_message)
+    // 1. CHERCHER OU CRÉER LA ROOM DM
+    let dm_room_opt = direct_message::Entity::find()
+        .filter(
+            Condition::any()
+                .add(
+                    Condition::all()
+                        .add(direct_message::Column::User1Id.eq(claims.sub))
+                        .add(direct_message::Column::User2Id.eq(target_user_id))
+                )
+                .add(
+                    Condition::all()
+                        .add(direct_message::Column::User1Id.eq(target_user_id))
+                        .add(direct_message::Column::User2Id.eq(claims.sub))
+                )
+        )
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    let dm_id = match dm_room_opt {
+        Some(room) => room.id,
+        None => {
+            // Créer la room à la volée si c'est le 1er message
+            let new_room = direct_message::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                user1_id: Set(claims.sub),
+                user2_id: Set(target_user_id),
+                content: Set(String::new()), 
+                created_at: Set(Utc::now()),
+            };
+            let room = new_room.insert(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+            room.id
+        }
+    };
+
+    // 2. Insertion DB du message
     let new_message = message::ActiveModel {
         id: Set(Uuid::new_v4()),
         channel_id: Set(None),
         server_id: Set(None),
         user_id: Set(claims.sub), 
         content: Set(req.content.clone()),
-        direct_message: Set(Some(dm_id)),
+        direct_message: Set(Some(dm_id)), // On utilise l'ID généré ou récupéré
         created_at: Set(Utc::now()), 
         ..Default::default()
     };
 
     let saved_msg = new_message.insert(db).await.map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
-    // 2. Récupération infos User
+    // 3. Récupération infos User
     let user_info = user::Entity::find_by_id(claims.sub)
         .one(db)
         .await
         .map_err(|e| AppError::InternalServerError(e.to_string()))?
         .ok_or(AppError::InternalServerError("User not found".to_string()))?;
 
-    // 3. BROADCAST VIA WEBSOCKET
+    // 4. BROADCAST VIA WEBSOCKET
     let ws_payload = json!({
         "type": "new_dm_message",
         "data": {
@@ -127,13 +162,14 @@ pub async fn send_dm(
             "content": saved_msg.content,
             "user_id": saved_msg.user_id.to_string(),
             "author_username": user_info.username.clone(),
-            "direct_message_id": dm_id.to_string(),
+            "direct_message_id": dm_id.to_string(), 
+            "target_users": [claims.sub.to_string(), target_user_id.to_string()], // <-- LIGNE AJOUTÉE ICI
             "created_at": saved_msg.created_at.to_string()
         }
     });
     let _ = tx.send(ws_payload.to_string());
 
-    // 4. Retour HTTP
+    // 5. Retour HTTP
     Ok(MessageItem {
         id: saved_msg.id,
         content: saved_msg.content,
@@ -368,19 +404,32 @@ pub async fn update_message(
     })
 }
 
-pub async fn get_direct_messages(db: &DatabaseConnection, claims: Claims, dm_id: Uuid) -> Result<GetMessagesResponse, AppError> {
+pub async fn get_direct_messages(db: &DatabaseConnection, claims: Claims, target_user_id: Uuid) -> Result<GetMessagesResponse, AppError> {
     
-    // 1. Vérification que la room ("direct_message") existe et que l'utilisateur y a accès
-    let dm_room = crate::domain::models::direct_message::Entity::find_by_id(dm_id)
+    // 1. Chercher la conversation avec ce user_id
+    let dm_room_opt = direct_message::Entity::find()
+        .filter(
+            Condition::any()
+                .add(
+                    Condition::all()
+                        .add(direct_message::Column::User1Id.eq(claims.sub))
+                        .add(direct_message::Column::User2Id.eq(target_user_id))
+                )
+                .add(
+                    Condition::all()
+                        .add(direct_message::Column::User1Id.eq(target_user_id))
+                        .add(direct_message::Column::User2Id.eq(claims.sub))
+                )
+        )
         .one(db)
         .await
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?
-        .ok_or(AppError::NotFound("Direct message conversation not found".to_string()))?;
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
-    // Seulement le sender ou le receiver peuvent lire cette conversation
-     if dm_room.user1_id != claims.sub && dm_room.user2_id != claims.sub {
-        return Err(AppError::Forbidden("You are not part of this conversation".to_string()));
-    }
+    // Si on a rien trouvé, ils n'ont jamais discuté. On retourne un tableau vide au lieu de faire une erreur 404.
+    let dm_id = match dm_room_opt {
+        Some(room) => room.id,
+        None => return Ok(GetMessagesResponse { message_list: vec![] }),
+    };
 
     // 2. Récupérer les messages liés à cet ID de DM
     let messages = message::Entity::find()
@@ -412,6 +461,54 @@ pub async fn get_direct_messages(db: &DatabaseConnection, claims: Claims, dm_id:
     }).collect();
 
     Ok(GetMessagesResponse { message_list })
+}
+
+pub async fn get_dm_list(db: &DatabaseConnection, claims: Claims) -> Result<GetDMSresponse, AppError> {
+    
+    // Récupérer tous les DMs où l'utilisateur est soit user1 soit user2
+    let dms = direct_message::Entity::find()
+        .filter(
+            Condition::any()
+                .add(direct_message::Column::User1Id.eq(claims.sub))
+                .add(direct_message::Column::User2Id.eq(claims.sub))
+        )
+        .all(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    let mut user_ids = Vec::new();
+    for dm in &dms {
+        user_ids.push(dm.user1_id);
+        user_ids.push(dm.user2_id);
+    }
+    user_ids.sort();
+    user_ids.dedup();
+
+    let users = user::Entity::find()
+        .filter(user::Column::Id.is_in(user_ids))
+        .all(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    let mut user_map: HashMap<Uuid, String> = HashMap::new();
+    for u in users {
+        user_map.insert(u.id, u.username);
+    }
+
+     let dm_list = dms.into_iter().map(|dm| {
+        let u1_name = user_map.get(&dm.user1_id).cloned().unwrap_or_else(|| "Utilisateur Inconnu".to_string());
+        let u2_name = user_map.get(&dm.user2_id).cloned().unwrap_or_else(|| "Utilisateur Inconnu".to_string());
+
+        DmItem {
+            id: dm.id,
+            user1: dm.user1_id,
+            user2: dm.user2_id,
+            user1_username: u1_name,
+            user2_username: u2_name,
+        }
+    }).collect();
+
+    Ok(GetDMSresponse { dm_list })
 }
 
 pub async fn toggle_reaction(

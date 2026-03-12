@@ -126,7 +126,6 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             match rx.recv().await {
                 Ok(msg_string) => {
                    if let Ok(json_msg) = serde_json::from_str::<Value>(&msg_string) {
-                        // Extraction robuste de l'ID du serveur
                         let maybe_server_id = json_msg.get("data")
                             .and_then(|data| data.get("server_id"))
                             .and_then(|v| {
@@ -134,13 +133,28 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                 .or_else(|| v.as_str().and_then(|s| s.parse::<i32>().ok()))
                             });
 
+                        // NOUVEAU: Extraction des cibles pour les DMs
+                        let target_users = json_msg.get("data")
+                            .and_then(|data| data.get("target_users"))
+                            .and_then(|v| v.as_array());
+
+                        let mut should_send = false;
+
                         if let Some(msg_server_id) = maybe_server_id {
                              if user_server_ids.contains(&msg_server_id) {
-                                if let Err(_e) = sender.send(Message::Text(msg_string.into())).await {
-                                    // println!("WS: Erreur d'envoi socket: {}", e);
-                                    break; 
-                                }
+                                should_send = true;
                             }
+                        } else if let Some(users) = target_users {
+                             let my_id = user_id.to_string();
+                             if users.iter().any(|u| u.as_str() == Some(&my_id)) {
+                                 should_send = true;
+                             }
+                        }
+
+                        if should_send {
+                             if let Err(_e) = sender.send(Message::Text(msg_string.into())).await {
+                                 break; 
+                             }
                         }
                     }
                 },
@@ -156,12 +170,27 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             if let Message::Text(text) = msg {
                  if let Ok(client_msg) = serde_json::from_str::<Value>(&text) {
                      let msg_type = client_msg["type"].as_str().unwrap_or("");
+                     
                      if msg_type == "typing_start" || msg_type == "typing_stop" {
                          let broadcast_msg = json!({
                             "type": msg_type,
                             "data": {
                                 "server_id": client_msg["server_id"],
                                 "channel_id": client_msg["channel_id"],
+                                "user_id": authenticated_user_id,
+                                "username": username_for_recv 
+                            }
+                        });
+                        let _ = tx.send(broadcast_msg.to_string());
+                     }
+                     // NOUVEAU: Event Typing pour les DM
+                     else if msg_type == "dm_typing_start" || msg_type == "dm_typing_stop" {
+                         let target_user_id = client_msg["target_user_id"].as_str().unwrap_or("");
+                         let broadcast_msg = json!({
+                            "type": msg_type,
+                            "data": {
+                                // On cible explicitement l'expéditeur et le destinataire
+                                "target_users": [authenticated_user_id.unwrap().to_string(), target_user_id.to_string()],
                                 "user_id": authenticated_user_id,
                                 "username": username_for_recv 
                             }

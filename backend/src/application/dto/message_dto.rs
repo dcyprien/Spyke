@@ -6,7 +6,7 @@ use uuid::Uuid;
 pub struct SendMessageRequest {
     pub content: String,
     pub server_id: Option<i32>,
-    pub direct_message: Option<Uuid>
+    pub target_id: Option<Uuid>
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -41,6 +41,20 @@ pub struct UpdateMessageRequest {
 #[derive(Debug, Serialize)]
 pub struct UpdateMessageResponse {
     pub new_message: MessageItem
+}
+
+#[derive(Debug, Serialize)]
+pub struct DmItem {
+    pub id: Uuid,
+    pub user1 : Uuid,
+    pub user2 : Uuid,
+    pub user1_username: String,
+    pub user2_username: String
+}
+
+#[derive(Debug, Serialize)]
+pub struct GetDMSresponse {
+    pub dm_list : Vec<DmItem>
 }
 
 #[derive(Debug, Deserialize)]
