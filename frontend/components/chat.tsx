@@ -82,7 +82,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                 });
             } else if (activeDMUser) {
                 // ATTENTION: Remplacez l'URL par l'endpoint réel de vos DMs dans votre backend
-                res = await fetch(`http://localhost:3000/dms/${activeDMUser.id}/messages`, {
+                res = await fetch(`http://localhost:3000/dm/${activeDMUser.id}/messages`, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
             }
@@ -109,20 +109,49 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
 
   // ÉCOUTE DU WEBSOCKET
   useEffect(() => {
-    if (!socket || !selectedChannel) return;
+    if (!socket) return;
+    // On libère la condition : on écoute si on est sur un channel OU en DM
+    if (!selectedChannel && !activeDMUser) return;
 
     const handleMessage = (event: MessageEvent) => {
         try {
             const parsed = JSON.parse(event.data);
             const data = parsed.data;
 
-            if (parsed.type === "DELETE_MESSAGE" || parsed.type === "UPDATE_MESSAGE") {
-                console.log("WS Event reçu:", parsed.type, data);
-            }
-
             switch (parsed.type) {
+                // --- AJOUT DMs ---
+                case "new_dm_message":
+                    // On verify si le message concerne la cover actuelle ou nous
+                    if (data.user_id === activeDMUser?.id || data.user_id === user?.id) {
+                        const newMsg: Message = {
+                            id: String(data.id),
+                            author: data.author_username || data.user_id,
+                            author_id: data.user_id,
+                            content: data.content,
+                            time: new Date(data.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+                            serverId: 0,
+                            channelId: "",
+                        };
+                        setMessages((prev) => [...prev, newMsg]);
+                    }
+                    break;
+                case "dm_typing_start":
+                    if (data.user_id === activeDMUser?.id) {
+                        setTypingUsers(prev => {
+                            if (!prev.includes(data.username)) return [...prev, data.username];
+                            return prev;
+                        });
+                    }
+                    break;
+                case "dm_typing_stop":
+                    if (data.user_id === activeDMUser?.id) {
+                        setTypingUsers(prev => prev.filter(u => u !== data.username));
+                    }
+                    break;
+                // -----------------
+
                 case "new_message":             
-                    if (String(data.channel_id) === String(selectedChannel.id)) {
+                    if (selectedChannel && String(data.channel_id) === String(selectedChannel.id)) {
                         const newMsg: Message = {
                             id: String(data.id),
                             author: data.author_username || data.user_id,
@@ -177,7 +206,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
 
     socket.addEventListener("message", handleMessage);
     return () => socket.removeEventListener("message", handleMessage);
-  }, [socket, selectedChannel, user]);
+  }, [socket, selectedChannel, activeDMUser, user]); // <-- Ajout de activeDMUser ici
 
 
   const sendMessage = async () => {
@@ -200,11 +229,15 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
             }
         } else if (activeDMUser) {
             // ATTENTION: Endpoint DM à adapter selon votre backend
-            await fetch(`http://localhost:3000/dms/${activeDMUser.id}/messages`, {
+            await fetch(`http://localhost:3000/dm/${activeDMUser.id}/messages`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ content: contentToSend })
             });
+            // NOUVEAU : Stop l'indicateur DM
+            if (socket) {
+                socket.send(JSON.stringify({ type: "dm_typing_stop", target_user_id: activeDMUser.id }));
+            }
         }
     } catch (e) { console.error(e); }
   };
@@ -268,35 +301,57 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setMessage(val);
-    if (socket && selectedChannel && selectedServer && user) {
-        if (!isTypingRef.current && val.length > 0) {
-            isTypingRef.current = true;
-            socket.send(JSON.stringify({
-                type: "typing_start",
-                server_id: selectedServer.id,
-                channel_id: selectedChannel.id
-            }));
+    if (socket && user) {
+        // --- CAS DM ---
+        if (activeDMUser) {
+            if (!isTypingRef.current && val.length > 0) {
+                isTypingRef.current = true;
+                socket.send(JSON.stringify({ type: "dm_typing_start", target_user_id: activeDMUser.id }));
+            }
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            if (val.length === 0) {
+                socket.send(JSON.stringify({ type: "dm_typing_stop", target_user_id: activeDMUser.id }));
+                isTypingRef.current = false;
+            } else {
+                typingTimeoutRef.current = setTimeout(() => {
+                    if (isTypingRef.current) {
+                        socket.send(JSON.stringify({ type: "dm_typing_stop", target_user_id: activeDMUser.id }));
+                        isTypingRef.current = false;
+                    }
+                }, 3000);
+            }
         }
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        // --- CAS SERVEUR / CHANNEL ---
+        else if (selectedChannel && selectedServer) {
+            if (!isTypingRef.current && val.length > 0) {
+                isTypingRef.current = true;
+                socket.send(JSON.stringify({
+                    type: "typing_start",
+                    server_id: selectedServer.id,
+                    channel_id: selectedChannel.id
+                }));
+            }
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
-        if (val.length === 0) {
-            socket.send(JSON.stringify({
-                type: "typing_stop",
-                server_id: selectedServer.id,
-                channel_id: selectedChannel.id
-            }));
-            isTypingRef.current = false;
-        } else {
-            typingTimeoutRef.current = setTimeout(() => {
-                if (isTypingRef.current) {
-                    socket.send(JSON.stringify({
-                        type: "typing_stop",
-                        server_id: selectedServer.id,
-                        channel_id: selectedChannel.id
-                    }));
-                    isTypingRef.current = false;
-                }
-            }, 3000);
+            if (val.length === 0) {
+                socket.send(JSON.stringify({
+                    type: "typing_stop",
+                    server_id: selectedServer.id,
+                    channel_id: selectedChannel.id
+                }));
+                isTypingRef.current = false;
+            } else {
+                typingTimeoutRef.current = setTimeout(() => {
+                    if (isTypingRef.current) {
+                        socket.send(JSON.stringify({
+                            type: "typing_stop",
+                            server_id: selectedServer.id,
+                            channel_id: selectedChannel.id
+                        }));
+                        isTypingRef.current = false;
+                    }
+                }, 3000);
+            }
         }
     }
   };
@@ -316,7 +371,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
   return (
     <div className={`flex flex-col h-screen bg-[#001952]
       pt-16 pb-16 md:pt-20 md:pb-0 px-4
-      md:ml-64 lg:mr-64
+      md:ml-64 ${selectedServer ? "lg:mr-64" : ""}
       ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
     `}>
       {/* Header */}

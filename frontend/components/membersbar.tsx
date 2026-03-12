@@ -288,11 +288,10 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
                   )}
                 </div>
 
-                {canManage && (
+                {!isMe && (
                     <button
                         onClick={(e) => { 
                             e.stopPropagation(); 
-                            // Correction ici pour la cohérence de l'ID d'ouverture
                             setOpenMenuId(openMenuId === member.id ? null : member.id); 
                         }}
                         className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-white transition px-1"
@@ -304,49 +303,52 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
                 {openMenuId === member.id && (
                     <div className="absolute right-8 top-8 w-48 bg-[#181825] rounded shadow-xl border border-[#3D3D3D] z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100">
                         
-                        {/* --- NOUVEAU BOUTON MESSAGE PRIVÉ --- */}
-                        {!isMe && (
-                            <button 
-                                onClick={() => {
-                                    if (onStartDM) onStartDM(member.user_id, member.displayName);
-                                    setOpenMenuId(null);
-                                }} 
-                                className="w-full text-left px-3 py-2 text-blue-400 hover:bg-blue-600 hover:text-white transition flex gap-2 border-b border-[#3D3D3D]"
-                            >
-                                💬 Message Privé
-                            </button>
-                        )}
-
-                        {/* Gestion Rôle Admin/Membre */}
-                        {currentUserRole === "Owner" && member.role === "Member" && (
-                            <button onClick={() => handleAction("promote", member.user_id)} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-blue-600 hover:text-white transition flex gap-2">
-                                {t.members_promote}
-                            </button>
-                        )}
-                        
-                        {currentUserRole === "Owner" && member.role === "Admin" && (
-                             <button onClick={() => handleAction("demote", member.user_id)} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-yellow-600 hover:text-white transition flex gap-2">
-                                {t.members_demote}
-                            </button>
-                        )}
-
-                        {currentUserRole === "Owner" && (
-                             <button onClick={() => handleAction("transfer", member.user_id)} className="w-full text-left px-3 py-2 text-amber-500 hover:bg-amber-600 hover:text-white transition flex gap-2 border-t border-[#3D3D3D]">
-                                {t.members_transfer}
-                            </button>
-                        )}
-
-                        <button onClick={() => handleAction("kick", member.user_id)} className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
-                            {t.members_kick}
+                        {/* --- BOUTON MESSAGE PRIVÉ TOUJOURS VISIBLE --- */}
+                        <button 
+                            onClick={() => {
+                                if (onStartDM) onStartDM(member.user_id, member.displayName);
+                                setOpenMenuId(null);
+                            }} 
+                            className="w-full text-left px-3 py-2 text-blue-400 hover:bg-blue-600 hover:text-white transition flex gap-2 border-b border-[#3D3D3D]"
+                        >
+                            💬 Message Privé
                         </button>
 
-                        <button onClick={() => { setOpenMenuId(null); setBanModal({ userId: member.user_id, displayName: member.displayName }); }} className="w-full text-left px-3 py-2 text-orange-400 hover:bg-orange-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
-                            {t.members_temp_ban}
-                        </button>
+                        {/* --- ACTIONS DE MODÉRATION BLOQUÉES DERRIÈRE CANMANAGE --- */}
+                        {canManage && (
+                            <>
+                                {/* Gestion Rôle Admin/Membre */}
+                                {currentUserRole === "Owner" && member.role === "Member" && (
+                                    <button onClick={() => handleAction("promote", member.user_id)} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-blue-600 hover:text-white transition flex gap-2">
+                                        {t.members_promote}
+                                    </button>
+                                )}
+                                
+                                {currentUserRole === "Owner" && member.role === "Admin" && (
+                                     <button onClick={() => handleAction("demote", member.user_id)} className="w-full text-left px-3 py-2 text-gray-300 hover:bg-yellow-600 hover:text-white transition flex gap-2">
+                                        {t.members_demote}
+                                    </button>
+                                )}
 
-                        <button onClick={() => handleAction("permban", member.user_id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-700 hover:text-white border-t border-[#3D3D3D] transition flex gap-2 font-semibold">
-                            {t.members_perm_ban}
-                        </button>
+                                {currentUserRole === "Owner" && (
+                                     <button onClick={() => handleAction("transfer", member.user_id)} className="w-full text-left px-3 py-2 text-amber-500 hover:bg-amber-600 hover:text-white transition flex gap-2 border-t border-[#3D3D3D]">
+                                        {t.members_transfer}
+                                    </button>
+                                )}
+
+                                <button onClick={() => handleAction("kick", member.user_id)} className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
+                                    {t.members_kick}
+                                </button>
+
+                                <button onClick={() => { setOpenMenuId(null); setBanModal({ userId: member.user_id, displayName: member.displayName }); }} className="w-full text-left px-3 py-2 text-orange-400 hover:bg-orange-600 hover:text-white border-t border-[#3D3D3D] transition flex gap-2">
+                                    {t.members_temp_ban}
+                                </button>
+
+                                <button onClick={() => handleAction("permban", member.user_id)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-700 hover:text-white border-t border-[#3D3D3D] transition flex gap-2 font-semibold">
+                                    {t.members_perm_ban}
+                                </button>
+                            </>
+                        )}
                         
                     </div>
                 )}

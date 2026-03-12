@@ -36,18 +36,37 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     if (storedUsername) setUsername(storedUsername);
   }, []);
 
+  // NOUVEAU : Ecoute le changement d'onglet pour nettoyer automatiquement le tchat affiché
+  useEffect(() => {
+    if (activeTab === "servers") {
+      setActiveDMUser(null);
+    } else if (activeTab === "dms") {
+      setSelectedServer(null);
+      setSelectedChannel(null);
+    }
+  }, [activeTab]);
+
   // Action : Quand on clique sur un serveur
-  const handleServerSelect = (server: Server) => {
+  const handleServerSelect = (server: Server | null) => { // <-- Ajout de | null
     setSelectedServer(server);
     setSelectedChannel(null); // On reset le salon pour forcer l'utilisateur à en choisir un
     setActiveDMUser(null);    // On quitte le mode DM
-    setActiveTab("servers");  // On s'assure d'afficher les serveurs
+    
+    // On rebascule sur l'onglet serveur UNIQUEMENT si on a cliqué sur un vrai serveur 
+    // (et non lors du nettoyage de changement d'onglet)
+    if (server) {
+        setActiveTab("servers");  
+    }
   };
 
   // Action : Quand on clique sur un salon
-  const handleChannelSelect = (channel: Channel) => {
+  const handleChannelSelect = (channel: Channel | null) => { // <-- Ajout de | null
     setSelectedChannel(channel);
     setActiveDMUser(null);    // On quitte le mode DM
+    
+    // Si channel est null, on s'arrête là (ce qui arrive quand on change d'onglet)
+    if (!channel) return;
+
     // Si on a un salon mais pas de serveur sélectionné (ou mauvais serveur), 
     // il faut s'assurer que selectedServer est bien défini pour la MembersBar
     if (channel.server_id && (!selectedServer || selectedServer.id !== channel.server_id)) {
@@ -92,17 +111,20 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       <ChatBar 
         onServerSelect={handleServerSelect} 
         onChannelSelect={handleChannelSelect} 
-        activeTab={activeTab} // <-- AJOUT
-        setActiveTab={setActiveTab} // <-- AJOUT
-        // username={username} // Si vous aviez cela, gardez-le
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onDMSelect={handleStartDM} 
       />
       
-      <MembersBar 
-        userStatus={userStatus} 
-        selectedServer={selectedServer} 
-        selectedChannel={selectedChannel} 
-        onStartDM={handleStartDM} // <-- AJOUT : Passe la fonction à MembersBar
-      />
+      {/* On n'affiche la barre des membres que sur l'onglet Serveurs */}
+      {activeTab === "servers" && (
+        <MembersBar 
+          userStatus={userStatus} 
+          selectedServer={selectedServer} 
+          selectedChannel={selectedChannel} 
+          onStartDM={handleStartDM} 
+        />
+      )}
 
       <Chat 
         selectedServer={selectedServer} 

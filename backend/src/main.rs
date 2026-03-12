@@ -72,10 +72,11 @@ async fn main() {
                             .delete(channel::delete_channel))
     .route("/channels/{id}/messages", post(message::send_message)
                                     .get(message::get_messages))
-    .route("/messages/{id}", post(message::send_dm)
-                            .delete(message::delete_message)
-                            .put(message::update_message)
-                            .get(message::get_direct_messages))
+    .route("/dm/{id}/messages", post(message::send_dm)
+                                .get(message::get_direct_messages))
+    .route("/dm", get(message::get_dm_list))
+    .route("/messages/{id}", delete(message::delete_message)
+                             .put(message::update_message))
     .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let cors = CorsLayer::new()

@@ -27,13 +27,13 @@ type ServerBarProps = {
   onJoinServer?: () => void;
   onCreateServer?: () => void;
   mobileTab?: string;
-  // --- NOUVEAUX PROPS ---
   activeTab: "servers" | "dms";
   setActiveTab: (tab: "servers" | "dms") => void;
+  onDMSelect?: (userId: string, username: string) => void; // <-- AJOUT
 };
 
-export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, activeTab, setActiveTab }: ServerBarProps) {
-  const { servers, addServer, setServers, refreshUserData, user, socket } = useAuth();
+export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, activeTab, setActiveTab, onDMSelect }: ServerBarProps) {
+  const { servers, addServer, setServers, refreshUserData, user, socket, connectWs } = useAuth();
   const { t } = useLang();
   
   const [expandedServerId, setExpandedServerId] = useState<number | null>(null);
@@ -50,22 +50,36 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
   
   // --- ACTIONS SERVEUR ---
 
-  const handleCreateServer = async () => {
+  const handleCreateServer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem("access_token");
+    
     try {
-      const token = localStorage.getItem("access_token");
       const res = await fetch("http://localhost:3000/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ name: serverName, description: serverDescription }),
+        body: JSON.stringify({ name: serverName, description: serverDescription })
       });
+
       if (res.ok) {
         const newServer = await res.json();
-        addServer(newServer);
+        
+        // MODIFICATION ICI : Au lieu de juste faire addServer(newServer), 
+        // forcez le rafraîchissement complet pour récupérer vos informations de membre :
+        await refreshUserData(); 
+        connectWs(); // <-- AJOUT : Reconnecte le WS pour qu'il prenne en charge le nouveau serveur
+
         setShowCreateModal(false);
         setServerName("");
         setServerDescription("");
+        
+        // Optionnel : Sélectionner automatiquement le serveur nouvellement créé
+        onServerSelect?.(newServer);
+        setActiveTab("servers");
       }
-    } catch (e) { alert(t.chatbar_create_error); }
+    } catch (e) {
+      console.error("Erreur création serveur:", e);
+    }
   };
 
   const handleJoinServer = async () => {
@@ -89,6 +103,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
 
       if (res.ok) {
         await refreshUserData();
+        connectWs();
         setJoinCode("");
         setJoinServerId("");
         setShowJoinInput(false);
@@ -277,6 +292,39 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editChannelName, setEditChannelName] = useState("");
 
+  // NOUVEAU : État et Fetch pour les DMs
+  const [dms, setDms] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeTab === "dms") {
+        const fetchDms = async () => {
+            const token = localStorage.getItem("access_token");
+            try {
+                const res = await fetch("http://localhost:3000/dm", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setDms(data.dm_list || []);
+                }
+            } catch (e) { console.error(e); }
+        };
+        fetchDms();
+    }
+  }, [activeTab]);
+
+  // NOUVEAU : Fonction de changement d'onglet (Nettoie l'interface)
+  const handleTabSwitch = (tab: "servers" | "dms") => {
+    setActiveTab(tab);
+    // Nettoie l'affichage visuel local
+    setSelectedServerId(null);
+    setSelectedChannelId(null);
+    
+    // Transmet l'annulation au parent
+    onServerSelect?.(null);
+    onChannelSelect?.(null);
+  };
+
   return (
     <>
       <div className={`
@@ -290,7 +338,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
       {/* --- MENU ONGLET: SERVEURS / DMs --- */}
       <div className="flex bg-[#0F0F1A] rounded-lg p-1 mb-4 border border-[#3D3D3D]">
         <button
-          onClick={() => setActiveTab("servers")}
+          onClick={() => handleTabSwitch("servers")}
           className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-all ${
             activeTab === "servers" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
           }`}
@@ -298,7 +346,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
           Serveurs
         </button>
         <button
-          onClick={() => setActiveTab("dms")}
+          onClick={() => handleTabSwitch("dms")}
           className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-all ${
             activeTab === "dms" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
           }`}
@@ -515,16 +563,31 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
         <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-gray-600">
           <h2 className="text-white text-lg font-bold mb-4">Messages Privés</h2>
 
-          {/* LISTE DES DMs (À mapper avec vos données réelles, ex: dms.map(...)) */}
-          <div className="text-gray-400 text-sm text-center mt-10">
-            <p>Aucun message privé pour le moment.</p>
-            {/* 
-              Exemple de rendu d'un DM :
-              <div className="flex items-center p-2 rounded-lg hover:bg-[#1E1E2E] cursor-pointer text-gray-300 transition-colors">
-                 <span>👤 Nom de l'utilisateur</span>
-              </div>
-            */}
-          </div>
+          {dms.length === 0 ? (
+            <div className="text-gray-400 text-sm text-center mt-10">
+              <p>Aucun message privé pour le moment.</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {dms.map(dm => {
+                // Déduction de l'ID et du pseudo de l'autre participant
+                const isUser1Me = dm.user1 === user?.id;
+                const otherUserId = isUser1Me ? dm.user2 : dm.user1;
+                const otherUsername = isUser1Me ? dm.user2_username : dm.user1_username;
+
+                return (
+                  <div 
+                    key={dm.id}
+                    onClick={() => onDMSelect?.(otherUserId, otherUsername)}
+                    className="flex items-center gap-2 p-3 rounded-lg hover:bg-[#1E1E2E] cursor-pointer text-gray-300 transition-colors"
+                  >
+                    <span>👤</span>
+                    <span className="truncate text-sm font-semibold text-white">{otherUsername}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

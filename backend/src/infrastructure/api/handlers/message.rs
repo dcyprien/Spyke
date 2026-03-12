@@ -13,8 +13,8 @@ pub async fn send_message(State(state): State<AppState>, claims: Claims, Path(ch
     }
 }
 
-pub async fn send_dm(State(state): State<AppState>, claims: Claims, Path(dm_id): Path<Uuid>, Json(payload): Json<SendMessageRequest>) -> impl IntoResponse {
-    match message_service::send_dm(&state.db, &state.tx, claims.clone(), dm_id, payload.clone()).await {
+pub async fn send_dm(State(state): State<AppState>, claims: Claims, Path(target_user_id): Path<Uuid>, Json(payload): Json<SendMessageRequest>) -> impl IntoResponse {
+    match message_service::send_dm(&state.db, &state.tx, claims.clone(), target_user_id, payload.clone()).await {
         Ok(msg) => (StatusCode::CREATED, Json(msg)).into_response(),
         Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
@@ -58,6 +58,13 @@ pub async fn update_message(State(state): State<AppState>, claims: Claims, Path(
 pub async fn get_direct_messages(State(state): State<AppState>, claims: Claims, Path(dm_id): Path<Uuid>) -> impl IntoResponse {
     match message_service::get_direct_messages(&state.db, claims, dm_id).await {
         Ok(msgs) => (StatusCode::OK, Json(msgs)).into_response(),
+        Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
+    }
+}
+
+pub async fn get_dm_list(State(state): State<AppState>, claims: Claims) -> impl IntoResponse {
+    match message_service::get_dm_list(&state.db, claims).await {
+        Ok(list) => (StatusCode::OK, Json(list)).into_response(),
         Err(e) => (e.status_code(), Json(json!({"error": e}))).into_response()
     }
 }
