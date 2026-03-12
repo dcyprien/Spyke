@@ -5,6 +5,11 @@ import { Server, Channel } from "./chatbar";
 import { useAuth } from "../app/context";
 import { useLang } from "../app/langContext";
 
+type Reaction = {
+  emoji: string;
+  userIds: string[];
+};
+
 type Message = {
   id: string; 
   author: string;
@@ -13,7 +18,10 @@ type Message = {
   time: string;
   serverId: number; 
   channelId: string;
+  reactions: Reaction[];
 };
+
+const REACTION_EMOJIS = ["👍", "👎", "😊", "😢", "❤️", "😂"];
 
 type Props = {
   selectedServer?: Server | null;
@@ -34,25 +42,92 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
   
   // États UI
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
 
   // --- NOUVEAUX ÉTATS POUR L'ÉDITION ---
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   // -------------------------------------
 
+  // --- ÉTATS GIF PICKER ---
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearch, setGifSearch] = useState("");
+  const [gifResults, setGifResults] = useState<{ id: string; url: string; preview: string }[]>([]);
+  const [gifLoading, setGifLoading] = useState(false);
+  // ------------------------
+
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScroll = useRef(true);
+  const gifPickerRef = useRef<HTMLDivElement | null>(null);
+  const gifBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [gifPickerPos, setGifPickerPos] = useState({ bottom: 0, right: 0 });
 
   const emojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "❤️", "🔥", "👍", "✨"];
 
-  // Fermer le menu si on clique ailleurs
+  // Fermer le menu / reaction picker si on clique ailleurs
   useEffect(() => {
-    const handleClickOutside = () => setOpenMenuId(null);
+    const handleClickOutside = () => { setOpenMenuId(null); setReactionPickerId(null); };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
+
+  // Fermer le GIF picker si clic en dehors (mousedown pour éviter les conflits React)
+  useEffect(() => {
+    if (!showGifPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        gifPickerRef.current && !gifPickerRef.current.contains(e.target as Node) &&
+        gifBtnRef.current && !gifBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowGifPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showGifPicker]);
+
+  // Fetch GIFs (trending ou recherche)
+  const fetchGifs = async (query: string) => {
+    const apiKey = process.env.NEXT_PUBLIC_GIPHY_API_KEY;
+    setGifLoading(true);
+    try {
+      const endpoint = query.trim()
+        ? `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=24&rating=g`
+        : `https://api.giphy.com/v1/gifs/trending?api_key=${apiKey}&limit=24&rating=g`;
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const data = await res.json();
+        setGifResults(data.data.map((g: any) => ({
+          id: g.id,
+          url: g.images.fixed_height.url,
+          preview: g.images.fixed_height_small.url,
+        })));
+      }
+    } catch (e) { console.error(e); }
+    setGifLoading(false);
+  };
+
+  // Debounce recherche GIF
+  useEffect(() => {
+    if (!showGifPicker) return;
+    const timeout = setTimeout(() => fetchGifs(gifSearch), 350);
+    return () => clearTimeout(timeout);
+  }, [gifSearch, showGifPicker]);
+
+  const sendGif = async (gifUrl: string) => {
+    if (!selectedServer || !selectedChannel) return;
+    const token = localStorage.getItem("access_token");
+    setShowGifPicker(false);
+    try {
+      await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ server_id: selectedServer.id, content: gifUrl }),
+      });
+    } catch (e) { console.error(e); }
+  };
 
   // Bloque scroll body
   useEffect(() => {
@@ -97,6 +172,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                     time: new Date(msg.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
                     serverId: msg.server_id,
                     channelId: msg.channel_id,
+                    reactions: (msg.reactions || []).map((r: any) => ({ emoji: r.emoji, userIds: r.user_ids || [] })),
                 }));
                 setMessages(history);
             }
@@ -159,7 +235,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             content: data.content,
                             time: new Date(data.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
                             serverId: data.server_id,
-                            channelId: data.channel_id
+                            channelId: data.channel_id,
+                            reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
                     }
@@ -182,7 +259,37 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                         }));
                     }
                     break;
-                // -------------------------------------
+
+                case "REACTION_ADD":
+                    if (String(data.channel_id) === String(selectedChannel.id)) {
+                        setMessages((prev) => prev.map(m => {
+                            if (String(m.id) !== String(data.message_id)) return m;
+                            const existing = m.reactions.find(r => r.emoji === data.emoji);
+                            if (existing) {
+                                if (existing.userIds.includes(data.user_id)) return m; // optimistic already applied
+                                return { ...m, reactions: m.reactions.map(r => r.emoji === data.emoji ? { ...r, userIds: [...r.userIds, data.user_id] } : r) };
+                            }
+                            return { ...m, reactions: [...m.reactions, { emoji: data.emoji, userIds: [data.user_id] }] };
+                        }));
+                    }
+                    break;
+
+                case "REACTION_REMOVE":
+                    if (String(data.channel_id) === String(selectedChannel.id)) {
+                        setMessages((prev) => prev.map(m => {
+                            if (String(m.id) !== String(data.message_id)) return m;
+                            const existing = m.reactions.find(r => r.emoji === data.emoji);
+                            if (!existing) return m;
+                            const updated = existing.userIds.filter((id: string) => id !== data.user_id);
+                            return {
+                                ...m,
+                                reactions: updated.length === 0
+                                    ? m.reactions.filter(r => r.emoji !== data.emoji)
+                                    : m.reactions.map(r => r.emoji === data.emoji ? { ...r, userIds: updated } : r)
+                            };
+                        }));
+                    }
+                    break;
 
                 case "typing_start":
                     if (data.username !== user?.username && String(data.channel_id) === String(selectedChannel.id)) {
@@ -298,6 +405,40 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
   };
   // -----------------------------------
 
+  const toggleReaction = async (msgId: string, emoji: string) => {
+    if (!user) return;
+    // Optimistic update
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      const existing = m.reactions.find(r => r.emoji === emoji);
+      let newReactions: Reaction[];
+      if (existing) {
+        const hasReacted = existing.userIds.includes(user.id);
+        if (hasReacted) {
+          const updated = existing.userIds.filter(id => id !== user.id);
+          newReactions = updated.length === 0
+            ? m.reactions.filter(r => r.emoji !== emoji)
+            : m.reactions.map(r => r.emoji === emoji ? { ...r, userIds: updated } : r);
+        } else {
+          newReactions = m.reactions.map(r => r.emoji === emoji ? { ...r, userIds: [...r.userIds, user.id] } : r);
+        }
+      } else {
+        newReactions = [...m.reactions, { emoji, userIds: [user.id] }];
+      }
+      return { ...m, reactions: newReactions };
+    }));
+    setReactionPickerId(null);
+    // Persist to backend (WebSocket will sync other users)
+    const token = localStorage.getItem("access_token");
+    try {
+      await fetch(`http://localhost:3000/messages/${msgId}/reactions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ emoji }),
+      });
+    } catch (e) { console.error(e); }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setMessage(val);
@@ -368,6 +509,11 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
   }, [messages]);
 
 
+  const isGifUrl = (content: string) => {
+    const trimmed = content.trim();
+    return trimmed.startsWith("https://media") && trimmed.includes("giphy.com");
+  };
+
   return (
     <div className={`flex flex-col h-screen bg-[#001952]
       pt-16 pb-16 md:pt-20 md:pb-0 px-4
@@ -406,7 +552,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
               </div>
 
               {/* Bulle Message : MODE NORMAL vs MODE ÉDITION */}
-              <div className="bg-dark-navy text-white px-4 py-2 rounded-lg border border-white/5 break-words relative pr-10">
+              <div className="bg-dark-navy text-white px-4 py-2 rounded-lg border border-white/5 break-words relative pr-16 pb-2">
                 
                 {/* --- CONTENU DU MESSAGE OU INPUT D'EDITION --- */}
                 {editingMessageId === msg.id ? (
@@ -426,11 +572,15 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             <span className="text-gray-400">Entrée pour valider • Echap pour annuler</span>
                         </div>
                     </div>
+                ) : isGifUrl(msg.content) ? (
+                    <img
+                        src={msg.content.trim()}
+                        alt="GIF"
+                        className="max-w-full rounded-lg max-h-48 object-contain mt-1"
+                        loading="lazy"
+                    />
                 ) : (
-                    <>
-                        {msg.content} 
-                        {/* Indicateur (modifié) si besoin, mais pas stocké en DB dans cet exemple */}
-                    </>
+                    msg.content
                 )}
 
 
@@ -440,11 +590,66 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                         onClick={(e) => {
                             e.preventDefault(); e.nativeEvent.stopImmediatePropagation(); e.stopPropagation();
                             setOpenMenuId(prev => prev === msg.id ? null : msg.id);
+                            setReactionPickerId(null);
                         }}
                         className={`absolute top-2 right-2 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition ${openMenuId === msg.id ? "opacity-100 bg-white/10" : "opacity-0 group-hover:opacity-100"}`}
                     >
                         ⋮
                     </button>
+                )}
+
+                {/* --- BOUTON RÉACTION (Caché si mode édition) --- */}
+                {editingMessageId !== msg.id && (
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault(); e.nativeEvent.stopImmediatePropagation(); e.stopPropagation();
+                            setReactionPickerId(prev => prev === msg.id ? null : msg.id);
+                            setOpenMenuId(null);
+                        }}
+                        className={`absolute top-2 right-8 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition text-xs ${reactionPickerId === msg.id ? "opacity-100 bg-white/10" : "opacity-0 group-hover:opacity-100"}`}
+                    >
+                        😊
+                    </button>
+                )}
+
+                {/* --- PICKER DE RÉACTIONS --- */}
+                {reactionPickerId === msg.id && (
+                    <div
+                        onClick={(e) => { e.nativeEvent.stopImmediatePropagation(); e.stopPropagation(); }}
+                        className="absolute bottom-10 right-0 bg-[#0F0F1A] border border-gray-700 rounded-full shadow-xl z-50 flex items-center gap-1 px-2 py-1"
+                    >
+                        {REACTION_EMOJIS.map(emoji => (
+                            <button
+                                key={emoji}
+                                onClick={() => toggleReaction(msg.id, emoji)}
+                                className={`text-lg hover:scale-125 transition-transform rounded-full w-8 h-8 flex items-center justify-center hover:bg-white/10 ${
+                                    msg.reactions.find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
+                                }`}
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* --- RÉACTIONS AFFICHÉES --- */}
+                {msg.reactions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                        {msg.reactions.map(r => (
+                            <button
+                                key={r.emoji}
+                                onClick={(e) => { e.nativeEvent.stopImmediatePropagation(); e.stopPropagation(); toggleReaction(msg.id, r.emoji); }}
+                                className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition hover:scale-105 ${
+                                    r.userIds.includes(user?.id ?? "")
+                                        ? "border-blue-500 bg-blue-500/20 text-white"
+                                        : "border-gray-700 bg-white/5 text-gray-300 hover:border-gray-500"
+                                }`}
+                            >
+                                <span>{r.emoji}</span>
+                                <span className="font-semibold">{r.userIds.length}</span>
+                            </button>
+                        ))}
+                    </div>
                 )}
 
                 {/* --- MENU DEROULANT --- */}
@@ -546,6 +751,98 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
           </svg>
           <span className="hidden sm:inline">{t.chat_send_btn}</span>
         </button>
+
+        {/* Bouton GIF + Picker */}
+        <div className="relative">
+          <button
+            ref={gifBtnRef}
+            onClick={() => {
+              if (gifBtnRef.current) {
+                const rect = gifBtnRef.current.getBoundingClientRect();
+                setGifPickerPos({
+                  bottom: window.innerHeight - rect.top + 8,
+                  right: window.innerWidth - rect.right,
+                });
+              }
+              setShowGifPicker(p => !p);
+              setShowEmojiPicker(false);
+            }}
+            disabled={!selectedChannel}
+            className="p-2 rounded-lg bg-dark-navy hover:bg-navy-deep text-white text-xs font-bold disabled:opacity-30 transition border border-white/10 h-10 px-3"
+          >
+            GIF
+          </button>
+        </div>
+
+        {/* GIF Picker — fixed pour éviter tout problème d'overflow parent */}
+        {showGifPicker && (
+          <div
+            ref={gifPickerRef}
+            className="fixed bg-[#0F0F1A] border border-gray-700 rounded-xl shadow-2xl z-[9999] flex flex-col overflow-hidden"
+            style={{
+              bottom: gifPickerPos.bottom,
+              right: gifPickerPos.right,
+              width: "min(380px, 92vw)",
+            }}
+          >
+            {/* Barre de recherche */}
+            <div className="p-3 border-b border-gray-700 flex items-center gap-2">
+              <span className="text-lg">🔍</span>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Rechercher un GIF..."
+                value={gifSearch}
+                onChange={e => setGifSearch(e.target.value)}
+                className="flex-1 bg-black/40 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan placeholder-gray-500"
+              />
+              <button
+                onClick={() => setShowGifPicker(false)}
+                className="text-gray-400 hover:text-white transition p-1 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Label tendances / résultats */}
+            <div className="px-3 pt-2 pb-1 text-xs text-gray-400 font-semibold uppercase tracking-wider">
+              {gifSearch.trim() ? `Résultats pour "${gifSearch}"` : "Tendances"}
+            </div>
+
+            {/* Grille de GIFs */}
+            <div className="overflow-y-auto" style={{ maxHeight: "260px" }}>
+              {gifLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-400 text-sm gap-2">
+                  <span className="animate-spin">⏳</span> Chargement...
+                </div>
+              ) : gifResults.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 text-sm">Aucun résultat</div>
+              ) : (
+                <div className="grid grid-cols-3 gap-1 p-2">
+                  {gifResults.map(gif => (
+                    <button
+                      key={gif.id}
+                      onClick={() => sendGif(gif.url)}
+                      className="rounded-md overflow-hidden hover:ring-2 hover:ring-blue-400 transition-all"
+                    >
+                      <img
+                        src={gif.preview}
+                        alt="gif"
+                        className="w-full h-20 object-cover"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Giphy */}
+            <div className="px-3 py-2 border-t border-gray-700 flex items-center justify-end">
+              <span className="text-[10px] text-gray-500">Powered by GIPHY</span>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

@@ -447,7 +447,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
                     {user?.id === server.owner_id ? (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleDeleteServer(server.id); }} 
-                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 hover:bg-white/10 p-1 rounded transition-all"
+                        className="md:opacity-0 md:group-hover:opacity-100 text-red-400 hover:text-red-500 hover:bg-white/10 p-1 rounded transition-all"
                         title="Supprimer le serveur"
                       >
                         🗑️
@@ -455,7 +455,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
                     ) : (
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleLeaveServer(server.id); }} 
-                        className="opacity-0 group-hover:opacity-100 text-yellow-400 hover:text-yellow-500 hover:bg-white/10 p-1 rounded transition-all text-xs font-bold"
+                        className="md:opacity-0 md:group-hover:opacity-100 text-yellow-400 hover:text-yellow-500 hover:bg-white/10 p-1 rounded transition-all text-xs font-bold"
                         title="Quitter le serveur"
                       >
                         🚪
