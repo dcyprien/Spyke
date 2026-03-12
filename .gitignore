@@ -1,5 +1,6 @@
 .env
 /backend/target/
+/frontend/src-tauri/target/
 # Ignorer les fichiers Rust compilés
 *.rs.bk
 *.rlib
