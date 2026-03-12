@@ -55,7 +55,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
     const token = localStorage.getItem("access_token");
     
     try {
-      const res = await fetch("http://localhost:3000/servers", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ name: serverName, description: serverDescription })
@@ -92,7 +92,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
       const token = localStorage.getItem("access_token");
       
       // On utilise l'ID saisi pour construire l'URL
-      const res = await fetch(`http://localhost:3000/servers/${joinServerId}/join`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${joinServerId}/join`, {
         method: "POST",
         headers: { 
             "Content-Type": "application/json", 
@@ -134,7 +134,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
     if(!confirm(t.chatbar_delete_server_confirm)) return;
     try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch(`http://localhost:3000/servers/${serverId}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}`, {
             method: "DELETE",
             headers: { "Authorization": `Bearer ${token}` },
         });
@@ -154,7 +154,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
     if(!confirm(t.chatbar_leave_server_confirm)) return;
     try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch(`http://localhost:3000/servers/${serverId}/leave`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}/leave`, {
             method: "DELETE", // C'est souvent DELETE pour leave aussi, ou POST. Vérifiez votre routeur.
             headers: { "Authorization": `Bearer ${token}` },
         });
@@ -178,7 +178,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
     
     try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch(`http://localhost:3000/servers/${serverId}/channels`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}/channels`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ server_id: serverId, name: name, description: "New channel" }),
@@ -191,7 +191,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
     if (!confirm(t.chatbar_delete_channel_confirm)) return;
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`http://localhost:3000/channels/${channelId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` },
       });
@@ -218,7 +218,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
       const token = localStorage.getItem("access_token");
 
       try {
-          const res = await fetch(`http://localhost:3000/channels/${channelId}`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}`, {
               method: "PUT",
               headers: { 
                   "Content-Type": "application/json", 
@@ -300,7 +300,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
         const fetchDms = async () => {
             const token = localStorage.getItem("access_token");
             try {
-                const res = await fetch("http://localhost:3000/dm", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dm`, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 if (res.ok) {
