@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/
 
 # IMPORTANT : On récupère le binaire compilé à l'étape 1
 # Remplace "NOM_DE_TON_PROJET" par le 'name' qui est dans ton Cargo.toml
-COPY --from=builder /app/target/release/NOM_DE_TON_PROJET /app/server
+COPY --from=builder /app/target/release/backend /app/server
 
 EXPOSE 3000
 
