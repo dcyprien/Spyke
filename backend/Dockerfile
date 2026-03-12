@@ -6,4 +6,6 @@ RUN cargo install cargo-watch && cargo install sea-orm-cli
 
 COPY . .
 
+EXPOSE 3000
+
 CMD ["cargo", "watch", "-x", "run"]
