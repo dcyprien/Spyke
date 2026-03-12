@@ -12,7 +12,7 @@ use backend::application::services::message_service;
 use backend::application::dto::message_dto::SendMessageRequest;
 use backend::application::dto::token_dto::Claims;
 use backend::application::dto::apperror::AppError;
-use backend::domain::models::{channel, message, server_member, server_member::MemberRole, user};
+use backend::domain::models::{channel, message, message_reaction, server_member, server_member::MemberRole, user};
 
 // Helper pour créer des claims
 fn create_claims(user_id: Uuid) -> Claims {
@@ -45,7 +45,7 @@ async fn test_send_message_success() {
         }]])
         // 3. Insert Message
         .append_query_results(vec![vec![message::Model {
-            id: msg_id, channel_id, server_id: srv_id, user_id, content: "Hello".to_string(), created_at: Utc::now()
+            id: msg_id, channel_id: Some(channel_id), server_id: Some(srv_id), user_id, content: "Hello".to_string(), direct_message: None, created_at: Utc::now()
         }]])
         // 4. Find User Info (pour le broadcast et return)
         .append_query_results(vec![vec![user::Model {
@@ -53,7 +53,7 @@ async fn test_send_message_success() {
         }]])
         .into_connection();
 
-    let req = SendMessageRequest { content: "Hello".to_string(), server_id: srv_id };
+    let req = SendMessageRequest { content: "Hello".to_string(), server_id: Some(srv_id), target_id: None };
     
     let res = message_service::send_message(&db, &tx, create_claims(user_id), channel_id, req).await;
     
@@ -74,7 +74,7 @@ async fn test_send_message_channel_mismatch() {
         .into_connection();
 
     // Request Server ID = 99 (Mismatch)
-    let req = SendMessageRequest { content: "He".to_string(), server_id: 99 };
+    let req = SendMessageRequest { content: "He".to_string(), server_id: Some(99), target_id: None };
     let res = message_service::send_message(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
     
     assert!(matches!(res, Err(AppError::BadRequest(msg)) if msg.contains("Channel error")));
@@ -90,7 +90,7 @@ async fn test_send_message_not_member() {
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
         .into_connection();
 
-    let req = SendMessageRequest { content: "H".to_string(), server_id: srv_id };
+    let req = SendMessageRequest { content: "H".to_string(), server_id: Some(srv_id), target_id: None };
     let res = message_service::send_message(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
     
     assert!(matches!(res, Err(AppError::Forbidden(msg)) if msg.contains("Not a member")));
@@ -105,7 +105,7 @@ async fn test_send_message_empty_content() {
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: Uuid::new_v4(), role: MemberRole::Member }]])
         .into_connection();
 
-    let req = SendMessageRequest { content: "   ".to_string(), server_id: srv_id };
+    let req = SendMessageRequest { content: "   ".to_string(), server_id: Some(srv_id), target_id: None };
     let res = message_service::send_message(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
     
     assert!(matches!(res, Err(AppError::BadRequest(msg)) if msg.contains("Empty content")));
@@ -118,7 +118,7 @@ async fn test_send_message_all_db_errors() {
     let (tx, _rx) = broadcast::channel(1);
     let uid = Uuid::new_v4();
     let cid = Uuid::new_v4();
-    let req = SendMessageRequest { content: "msg".to_string(), server_id: 1 };
+    let req = SendMessageRequest { content: "msg".to_string(), server_id: Some(1), target_id: None };
 
     // 1. Channel Find Error
     let db1 = MockDatabase::new(DatabaseBackend::Postgres)
@@ -145,7 +145,7 @@ async fn test_send_message_all_db_errors() {
     let db4 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![channel::Model { id: cid, server_id: 1, name: "C".to_string(), description: "".to_string(), position: 0 }]])
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: uid, role: MemberRole::Member }]])
-        .append_query_results(vec![vec![message::Model { id: Uuid::new_v4(), channel_id: cid, server_id: 1, user_id: uid, content: "msg".to_string(), created_at: Utc::now() }]])
+        .append_query_results(vec![vec![message::Model { id: Uuid::new_v4(), channel_id: Some(cid), server_id: Some(1), user_id: uid, content: "msg".to_string(), direct_message: None, created_at: Utc::now() }]])
         .append_query_errors(vec![DbErr::Custom("Find User Fail".to_string())])
         .into_connection();
     assert!(matches!(message_service::send_message(&db4, &tx, create_claims(uid), cid, req.clone()).await, Err(AppError::InternalServerError(_))));
@@ -167,15 +167,17 @@ async fn test_get_messages_mapping_success() {
         .append_query_results(vec![vec![
             // Msg 1 : Avec User
             (
-                message::Model { id: Uuid::new_v4(), channel_id: cid, server_id: 1, user_id: uid, content: "A".to_string(), created_at: Utc::now() },
+                message::Model { id: Uuid::new_v4(), channel_id: Some(cid), server_id: Some(1), user_id: uid, content: "A".to_string(), direct_message: None, created_at: Utc::now() },
                 Some(user::Model { id: uid, username: "Alice".to_string(), display_name: None, avatar_url: None, password_hash: "x".to_string(), status: backend::domain::models::user::UserStatus::Online })
             ),
             // Msg 2 : Sans User (supprimé)
             (
-                message::Model { id: Uuid::new_v4(), channel_id: cid, server_id: 1, user_id: Uuid::new_v4(), content: "B".to_string(), created_at: Utc::now() },
+                message::Model { id: Uuid::new_v4(), channel_id: Some(cid), server_id: Some(1), user_id: Uuid::new_v4(), content: "B".to_string(), direct_message: None, created_at: Utc::now() },
                 None 
             )
         ]])
+        // 4. Reactions (empty)
+        .append_query_results(vec![vec![] as Vec<message_reaction::Model>])
         .into_connection();
 
     let res = message_service::get_messages(&db, create_claims(uid), cid).await;
@@ -223,7 +225,7 @@ async fn test_delete_own_message_success() {
     let db = MockDatabase::new(DatabaseBackend::Postgres)
         // 1. Find Message (User matches request)
         .append_query_results(vec![vec![message::Model {
-            id: msg_id, channel_id: Uuid::new_v4(), server_id: 1, user_id: author_id, content: "M".to_string(), created_at: Utc::now()
+            id: msg_id, channel_id: Some(Uuid::new_v4()), server_id: Some(1), user_id: author_id, content: "M".to_string(), direct_message: None, created_at: Utc::now()
         }]])
         // 2. Delete
         .append_exec_results(vec![MockExecResult { last_insert_id: 0, rows_affected: 1 }])
@@ -245,7 +247,7 @@ async fn test_delete_other_message_as_owner() {
     let db = MockDatabase::new(DatabaseBackend::Postgres)
         // 1. Find Message (Author != Requester)
         .append_query_results(vec![vec![message::Model {
-            id: msg_id, channel_id, server_id: srv_id, user_id: other_user, content: "M".to_string(), created_at: Utc::now()
+            id: msg_id, channel_id: Some(channel_id), server_id: Some(srv_id), user_id: other_user, content: "M".to_string(), direct_message: None, created_at: Utc::now()
         }]])
         // 2. Find Channel (pour retrouver le server_id)
         .append_query_results(vec![vec![channel::Model {
@@ -272,7 +274,7 @@ async fn test_delete_other_message_forbidden() {
     let channel_id = Uuid::new_v4();
 
     let db = MockDatabase::new(DatabaseBackend::Postgres)
-        .append_query_results(vec![vec![message::Model { id: msg_id, channel_id, server_id: 1, user_id: Uuid::new_v4(), content: "M".to_string(), created_at: Utc::now() }]])
+        .append_query_results(vec![vec![message::Model { id: msg_id, channel_id: Some(channel_id), server_id: Some(1), user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
         .append_query_results(vec![vec![channel::Model { id: channel_id, server_id: 1, name: "C".to_string(), description: "".to_string(), position: 0 }]])
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id, role: MemberRole::Member }]]) // Rôle insuffisant
         .into_connection();
@@ -298,21 +300,21 @@ async fn test_delete_message_db_errors() {
 
     // 2. Author Delete Exec Fail (Case: Own message)
     let db2 = MockDatabase::new(DatabaseBackend::Postgres)
-        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Uuid::new_v4(), server_id: 1, user_id: uid, content: "M".to_string(), created_at: Utc::now() }]])
+        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Some(Uuid::new_v4()), server_id: Some(1), user_id: uid, content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
         .append_exec_errors(vec![DbErr::Custom("Delete Exec Fail".to_string())])
         .into_connection();
     assert!(matches!(message_service::delete_message(&db2, &tx, create_claims(uid), mid).await, Err(AppError::InternalServerError(_))));
 
     // 3. Channel Fetch Fail (Case: Not own message)
     let db3 = MockDatabase::new(DatabaseBackend::Postgres)
-        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), content: "M".to_string(), created_at: Utc::now() }]])
+        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Some(Uuid::new_v4()), server_id: Some(1), user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
         .append_query_errors(vec![DbErr::Custom("Find Channel Fail".to_string())])
         .into_connection();
     assert!(matches!(message_service::delete_message(&db3,  &tx, create_claims(uid), mid).await, Err(AppError::InternalServerError(_))));
 
     // 4. Membership Fetch Fail
     let db4 = MockDatabase::new(DatabaseBackend::Postgres)
-        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), content: "M".to_string(), created_at: Utc::now() }]])
+        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Some(Uuid::new_v4()), server_id: Some(1), user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
         .append_query_results(vec![vec![channel::Model { id: Uuid::new_v4(), server_id: 1, name: "C".to_string(), description: "".to_string(), position: 0 }]])
         .append_query_errors(vec![DbErr::Custom("Find Membership Fail".to_string())])
         .into_connection();
@@ -320,7 +322,7 @@ async fn test_delete_message_db_errors() {
 
     // 5. Admin Delete Exec Fail (Case: Admin)
     let db5 = MockDatabase::new(DatabaseBackend::Postgres)
-        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), content: "M".to_string(), created_at: Utc::now() }]])
+        .append_query_results(vec![vec![message::Model { id: mid, channel_id: Some(Uuid::new_v4()), server_id: Some(1), user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
         .append_query_results(vec![vec![channel::Model { id: Uuid::new_v4(), server_id: 1, name: "C".to_string(), description: "".to_string(), position: 0 }]])
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: uid, role: MemberRole::Admin }]])
         .append_exec_errors(vec![DbErr::Custom("Delete Admin Fail".to_string())])
