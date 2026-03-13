@@ -42,6 +42,18 @@ async fn main() {
     };
     
     Migrator::up(&db, None).await.expect("Impossible de migrer la DB");
+
+    let port: u16 = env::var("PORT")
+        .unwrap_or_else(|_| "3000".to_string())
+        .parse()
+        .expect("PORT doit être un nombre");
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    println!("Server listening on {}", addr);
+    
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("Failed to bind");
     
     let (tx, _rx) = broadcast::channel(100);
 
@@ -83,6 +95,10 @@ async fn main() {
     let cors = CorsLayer::new()
     .allow_origin([
         HeaderValue::from_static("http://localhost:3001"),
+        HeaderValue::from_static("http://localhost:3000"),
+        HeaderValue::from_static("tauri://localhost:3000"),
+        HeaderValue::from_static("app://localhost:3000"),
+        HeaderValue::from_static("asset://localhost:3000"),
     ])
     .allow_methods([
         Method::GET,
@@ -106,12 +122,6 @@ async fn main() {
         .layer(cors)
         .with_state(state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    println!("Server listening on {}", addr);
-    
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .expect("Failed to bind");
     
     axum::serve(listener, app)
         .await

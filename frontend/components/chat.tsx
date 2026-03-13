@@ -121,7 +121,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
     const token = localStorage.getItem("access_token");
     setShowGifPicker(false);
     try {
-      await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${selectedChannel.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ server_id: selectedServer.id, content: gifUrl }),
@@ -152,12 +152,12 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
         try {
             let res;
             if (selectedChannel) {
-                res = await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+                res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${selectedChannel.id}/messages`, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
             } else if (activeDMUser) {
                 // ATTENTION: Remplacez l'URL par l'endpoint réel de vos DMs dans votre backend
-                res = await fetch(`http://localhost:3000/dm/${activeDMUser.id}/messages`, {
+                res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dm/${activeDMUser.id}/messages`, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
             }
@@ -207,6 +207,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             time: new Date(data.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
                             serverId: 0,
                             channelId: "",
+                            reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
                     }
@@ -326,7 +327,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
 
     try {
         if (selectedChannel && selectedServer) {
-            await fetch(`http://localhost:3000/channels/${selectedChannel.id}/messages`, {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${selectedChannel.id}/messages`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ server_id: selectedServer.id, content: contentToSend })
@@ -336,7 +337,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
             }
         } else if (activeDMUser) {
             // ATTENTION: Endpoint DM à adapter selon votre backend
-            await fetch(`http://localhost:3000/dm/${activeDMUser.id}/messages`, {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dm/${activeDMUser.id}/messages`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ content: contentToSend })
@@ -354,7 +355,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
     setMessages((prev) => prev.filter(m => m.id !== msgId)); // Optimistic
 
     try {
-        await fetch(`http://localhost:3000/messages/${msgId}`, {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${msgId}`, {
             method: "DELETE",
             headers: { "Authorization": `Bearer ${token}` }
         });
@@ -384,7 +385,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
       setEditingMessageId(null);
 
       try {
-          const res = await fetch(`http://localhost:3000/messages/${msgId}`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${msgId}`, {
               method: "PUT",
               headers: { 
                   "Content-Type": "application/json",
@@ -431,7 +432,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
     // Persist to backend (WebSocket will sync other users)
     const token = localStorage.getItem("access_token");
     try {
-      await fetch(`http://localhost:3000/messages/${msgId}/reactions`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${msgId}/reactions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ emoji }),
@@ -623,7 +624,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                                 key={emoji}
                                 onClick={() => toggleReaction(msg.id, emoji)}
                                 className={`text-lg hover:scale-125 transition-transform rounded-full w-8 h-8 flex items-center justify-center hover:bg-white/10 ${
-                                    msg.reactions.find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
+                                    (msg.reactions || []).find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
                                 }`}
                             >
                                 {emoji}
@@ -633,7 +634,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                 )}
 
                 {/* --- RÉACTIONS AFFICHÉES --- */}
-                {msg.reactions.length > 0 && (
+                {(msg.reactions?.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                         {msg.reactions.map(r => (
                             <button
