@@ -1,30 +1,22 @@
 use sea_orm::{
-    DatabaseBackend, MockDatabase, MockExecResult, DbErr, 
-    EntityTrait, ActiveModelTrait
+    DatabaseBackend, MockDatabase, MockExecResult, DbErr, Transaction, ActiveModelTrait
 };
 use uuid::Uuid;
 use tokio::sync::broadcast;
-use chrono::Utc;
 use axum::http::StatusCode;
+use chrono::Utc;
+use crate::server_member::MemberRole;
 
 // Imports internes (ajustez selon votre structure exacte)
 use backend::application::services::message_service;
-use backend::application::dto::message_dto::SendMessageRequest;
+use backend::application::dto::message_dto::{SendMessageRequest, UpdateMessageRequest, ToggleReactionRequest};
 use backend::application::dto::token_dto::Claims;
 use backend::application::dto::apperror::AppError;
-use backend::domain::models::{channel, message, message_reaction, server_member, server_member::MemberRole, user};
+use backend::domain::models::{channel, message, message_reaction, server_member, user, direct_message};
 
-// Helper pour créer des claims
 fn create_claims(user_id: Uuid) -> Claims {
-    Claims {
-        sub: user_id,
-        username: "test_user".to_string(),
-        exp: 10000000000,
-        iat: 10000000000,
-    }
+    Claims { sub: user_id, exp: 10000000000, iat: 10000000000, username: "testuser".to_string() }
 }
-
-// --- SUITE 1 : SEND MESSAGE (Happy Path & Validations) ---
 
 #[tokio::test]
 async fn test_send_message_success() {
@@ -109,6 +101,234 @@ async fn test_send_message_empty_content() {
     let res = message_service::send_message(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
     
     assert!(matches!(res, Err(AppError::BadRequest(msg)) if msg.contains("Empty content")));
+}
+
+#[tokio::test]
+async fn test_send_dm_empty_content() {
+    let (tx, _) = broadcast::channel(1);
+    let db = MockDatabase::new(DatabaseBackend::Postgres).into_connection();
+    let req = SendMessageRequest { content: "   ".to_string(), server_id: None, target_id: None };
+    
+    let res = message_service::send_dm(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
+    assert!(matches!(res, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_send_dm_db_error_on_find() {
+    let (tx, _) = broadcast::channel(1);
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_errors(vec![DbErr::Custom("Find error".to_owned())])
+        .into_connection();
+    
+    let req = SendMessageRequest { content: "Hello".to_string(), server_id: None, target_id: None };
+    let res = message_service::send_dm(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_update_message_not_author() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+    let author_id = Uuid::new_v4();
+    let other_user_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results([vec![message::Model {
+            id: msg_id,
+            user_id: author_id,
+            content: "old".to_string(),
+            channel_id: None,
+            server_id: None,
+            direct_message: None,
+            created_at: Utc::now(),
+        }]])
+        .into_connection();
+
+    let req = UpdateMessageRequest { new_content: "new".to_string() };
+    let res = message_service::update_message(&db, &tx, create_claims(other_user_id), msg_id, req).await;
+    assert!(matches!(res, Err(AppError::Forbidden(_))));
+}
+
+#[tokio::test]
+async fn test_update_message_empty_content() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+    let author_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results([vec![message::Model {
+            id: msg_id,
+            user_id: author_id,
+            content: "old".to_string(),
+            channel_id: None,
+            server_id: None,
+            direct_message: None,
+            created_at: Utc::now(),
+        }]])
+        .into_connection();
+
+    let req = UpdateMessageRequest { new_content: "".to_string() };
+    let res = message_service::update_message(&db, &tx, create_claims(author_id), msg_id, req).await;
+    assert!(matches!(res, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_toggle_reaction_invalid_emoji() {
+    let (tx, _) = broadcast::channel(1);
+    let db = MockDatabase::new(DatabaseBackend::Postgres).into_connection();
+    
+    let req = ToggleReactionRequest { emoji: "INVALID".to_string() };
+    let res = message_service::toggle_reaction(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
+    assert!(matches!(res, Err(AppError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn test_toggle_reaction_message_not_found() {
+    let (tx, _) = broadcast::channel(1);
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results([Vec::<message::Model>::new()]) // Empty result
+        .into_connection();
+    
+    let req = ToggleReactionRequest { emoji: "\u{1F44D}".to_string() };
+    let res = message_service::toggle_reaction(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
+    assert!(matches!(res, Err(AppError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn test_get_dm_list_db_error() {
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_errors(vec![DbErr::Custom("DB Error".to_owned())])
+        .into_connection();
+        
+    let res = message_service::get_dm_list(&db, create_claims(Uuid::new_v4())).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_get_direct_messages_no_room() {
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results([Vec::<direct_message::Model>::new()]) // No room found
+        .into_connection();
+
+    let res = message_service::get_direct_messages(&db, create_claims(Uuid::new_v4()), Uuid::new_v4()).await;
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap().message_list.len(), 0); // Should return empty array
+}
+
+#[tokio::test]
+async fn test_send_dm_create_room_success() {
+    let (tx, _) = broadcast::channel(1);
+    let uid = Uuid::new_v4();
+    let target_id = Uuid::new_v4();
+    let room_id = Uuid::new_v4();
+    let msg_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Chercher la room (Non trouvée -> retourne vide)
+        .append_query_results(vec![vec![] as Vec<direct_message::Model>])
+        // 2. Insert de la nouvelle room DM
+        .append_query_results(vec![vec![direct_message::Model {
+            id: room_id, user1_id: uid, user2_id: target_id, content: "".to_string(), created_at: Utc::now()
+        }]])
+        // 3. Insert du nouveau message
+        .append_query_results(vec![vec![message::Model {
+            id: msg_id, channel_id: None, server_id: None, user_id: uid, content: "Hello".to_string(), direct_message: Some(room_id), created_at: Utc::now()
+        }]])
+        // 4. Fetch User
+        .append_query_results(vec![vec![user::Model {
+            id: uid, username: "Alice".to_string(), display_name: None, avatar_url: None, password_hash: "x".to_string(), status: backend::domain::models::user::UserStatus::Online
+        }]])
+        .into_connection();
+
+    let req = SendMessageRequest { content: "Hello".to_string(), server_id: None, target_id: Some(target_id) };
+    let res = message_service::send_dm(&db, &tx, create_claims(uid), target_id, req).await;
+
+    assert!(res.is_ok());
+    let msg = res.unwrap();
+    assert_eq!(msg.content, "Hello");
+    assert_eq!(msg.author, "Alice");
+    assert_eq!(msg.direct_message_id, Some(room_id));
+}
+
+#[tokio::test]
+async fn test_send_dm_insert_message_error() {
+    let (tx, _) = broadcast::channel(1);
+    let uid = Uuid::new_v4();
+    let target_id = Uuid::new_v4();
+    let room_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Chercher la room (Trouvée)
+        .append_query_results(vec![vec![direct_message::Model {
+            id: room_id, user1_id: uid, user2_id: target_id, content: "".to_string(), created_at: Utc::now()
+        }]])
+        // 2. Insert Message Fail
+        .append_query_errors(vec![DbErr::Custom("Insert Fail".to_string())])
+        .into_connection();
+
+    let req = SendMessageRequest { content: "Hello".to_string(), server_id: None, target_id: Some(target_id) };
+    let res = message_service::send_dm(&db, &tx, create_claims(uid), target_id, req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_update_message_db_error_on_find() {
+    let (tx, _) = broadcast::channel(1);
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_errors(vec![DbErr::Custom("DB Error".to_string())])
+        .into_connection();
+
+    let req = UpdateMessageRequest { new_content: "new".to_string() };
+    let res = message_service::update_message(&db, &tx, create_claims(Uuid::new_v4()), Uuid::new_v4(), req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_toggle_reaction_add_success() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find message
+        .append_query_results(vec![vec![message::Model {
+            id: msg_id, channel_id: None, server_id: None, user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now()
+        }]])
+        // 2. Find existing reaction (Not found)
+        .append_query_results(vec![vec![] as Vec<message_reaction::Model>])
+        // 3. Insert new reaction
+        .append_query_results(vec![vec![message_reaction::Model {
+            id: Uuid::new_v4(), message_id: msg_id, user_id, emoji: "\u{1F44D}".to_string(), created_at: Utc::now()
+        }]])
+        .into_connection();
+    
+    let req = ToggleReactionRequest { emoji: "\u{1F44D}".to_string() };
+    let res = message_service::toggle_reaction(&db, &tx, create_claims(user_id), msg_id, req).await;
+    assert!(res.is_ok());
+}
+
+#[tokio::test]
+async fn test_toggle_reaction_remove_success() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find message
+        .append_query_results(vec![vec![message::Model {
+            id: msg_id, channel_id: None, server_id: None, user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now()
+        }]])
+        // 2. Find existing reaction (Found)
+        .append_query_results(vec![vec![message_reaction::Model {
+            id: Uuid::new_v4(), message_id: msg_id, user_id, emoji: "\u{1F44D}".to_string(), created_at: Utc::now()
+        }]])
+        // 3. Remove reaction
+        .append_exec_results(vec![MockExecResult { last_insert_id: 0, rows_affected: 1 }])
+        .into_connection();
+    
+    let req = ToggleReactionRequest { emoji: "\u{1F44D}".to_string() };
+    let res = message_service::toggle_reaction(&db, &tx, create_claims(user_id), msg_id, req).await;
+    assert!(res.is_ok());
 }
 
 // --- SUITE 2 : SEND MESSAGE (DB Errors - Coverage .map_err) ---
@@ -328,4 +548,174 @@ async fn test_delete_message_db_errors() {
         .append_exec_errors(vec![DbErr::Custom("Delete Admin Fail".to_string())])
         .into_connection();
     assert!(matches!(message_service::delete_message(&db5, &tx, create_claims(uid), mid).await, Err(AppError::InternalServerError(_))));
+}
+
+// --- SUITE : UPDATE MESSAGE ---
+
+#[tokio::test]
+async fn test_update_message_success() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+    let author_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find message
+        .append_query_results([vec![message::Model {
+            id: msg_id, user_id: author_id, content: "old".to_string(), channel_id: None, server_id: None, direct_message: None, created_at: Utc::now()
+        }]])
+        // 2. Update execution (Postgres retourne le modèle mis à jour via RETURNING)
+        .append_query_results([vec![message::Model {
+            id: msg_id, user_id: author_id, content: "new_content".to_string(), channel_id: None, server_id: None, direct_message: None, created_at: Utc::now()
+        }]])
+        // 3. Find author user
+        .append_query_results([vec![user::Model {
+            id: author_id, username: "Updater".to_string(), display_name: None, avatar_url: None, password_hash: "x".to_string(), status: backend::domain::models::user::UserStatus::Online
+        }]])
+        .into_connection();
+
+    let req = UpdateMessageRequest { new_content: "new_content".to_string() };
+    let res = message_service::update_message(&db, &tx, create_claims(author_id), msg_id, req).await;
+    
+    // Si cela échoue toujours, vous pouvez faire println!("{:?}", res) pour voir la cause exacte de l'erreur
+    let response = res.expect("Update failed");
+    assert_eq!(response.new_message.content, "new_content");
+}
+
+#[tokio::test]
+async fn test_update_message_exec_error() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+    let author_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results([vec![message::Model {
+            id: msg_id, user_id: author_id, content: "old".to_string(), channel_id: None, server_id: None, direct_message: None, created_at: Utc::now()
+        }]])
+        // Remplacer append_exec_errors par append_query_errors
+        .append_query_errors(vec![DbErr::Custom("Update Fail".to_string())])
+        .into_connection();
+
+    let req = UpdateMessageRequest { new_content: "new".to_string() };
+    let res = message_service::update_message(&db, &tx, create_claims(author_id), msg_id, req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_update_message_find_author_error() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+    let author_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results([vec![message::Model {
+            id: msg_id, user_id: author_id, content: "old".to_string(), channel_id: None, server_id: None, direct_message: None, created_at: Utc::now()
+        }]])
+        // Le mock retourne le modèle mis à jour
+        .append_query_results([vec![message::Model {
+            id: msg_id, user_id: author_id, content: "new_content".to_string(), channel_id: None, server_id: None, direct_message: None, created_at: Utc::now()
+        }]])
+        .append_query_errors(vec![DbErr::Custom("Find User Fail".to_string())])
+        .into_connection();
+
+    let req = UpdateMessageRequest { new_content: "new".to_string() };
+    let res = message_service::update_message(&db, &tx, create_claims(author_id), msg_id, req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+// --- SUITE : GET DM LIST ---
+
+#[tokio::test]
+async fn test_get_dm_list_success() {
+    let uid1 = Uuid::new_v4();
+    let uid2 = Uuid::new_v4();
+    let dm_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find DMs
+        .append_query_results([vec![direct_message::Model {
+            id: dm_id, user1_id: uid1, user2_id: uid2, content: "".to_string(), created_at: Utc::now()
+        }]])
+        // 2. Find Users
+        .append_query_results([vec![
+            user::Model { id: uid1, username: "U1".to_string(), display_name: None, avatar_url: None, password_hash: "x".to_string(), status: backend::domain::models::user::UserStatus::Online },
+            user::Model { id: uid2, username: "U2".to_string(), display_name: None, avatar_url: None, password_hash: "x".to_string(), status: backend::domain::models::user::UserStatus::Online }
+        ]])
+        .into_connection();
+
+    let res = message_service::get_dm_list(&db, create_claims(uid1)).await;
+    assert!(res.is_ok());
+    let list = res.unwrap().dm_list;
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].user1_username, "U1");
+    assert_eq!(list[0].user2_username, "U2");
+}
+
+#[tokio::test]
+async fn test_get_dm_list_find_users_error() {
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results([vec![direct_message::Model {
+            id: Uuid::new_v4(), user1_id: Uuid::new_v4(), user2_id: Uuid::new_v4(), content: "".to_string(), created_at: Utc::now()
+        }]])
+        .append_query_errors(vec![DbErr::Custom("Find Users Fail".to_string())])
+        .into_connection();
+
+    let res = message_service::get_dm_list(&db, create_claims(Uuid::new_v4())).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+// --- SUITE : TOGGLE REACTION (Propagations d'erreurs) ---
+
+#[tokio::test]
+async fn test_toggle_reaction_find_existing_error() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find message (OK)
+        .append_query_results([vec![message::Model { id: msg_id, channel_id: None, server_id: None, user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
+        // 2. Find reaction (Fail)
+        .append_query_errors(vec![DbErr::Custom("Find Reaction Fail".to_string())])
+        .into_connection();
+    
+    let req = ToggleReactionRequest { emoji: "\u{1F44D}".to_string() };
+    let res = message_service::toggle_reaction(&db, &tx, create_claims(Uuid::new_v4()), msg_id, req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_toggle_reaction_delete_error() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find message
+        .append_query_results([vec![message::Model { id: msg_id, channel_id: None, server_id: None, user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
+        // 2. Find reaction (Found)
+        .append_query_results([vec![message_reaction::Model { id: Uuid::new_v4(), message_id: msg_id, user_id: Uuid::new_v4(), emoji: "\u{1F44D}".to_string(), created_at: Utc::now() }]])
+        // 3. Delete reaction (Fail)
+        .append_exec_errors(vec![DbErr::Custom("Delete Exec Fail".to_string())])
+        .into_connection();
+    
+    let req = ToggleReactionRequest { emoji: "\u{1F44D}".to_string() };
+    let res = message_service::toggle_reaction(&db, &tx, create_claims(Uuid::new_v4()), msg_id, req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_toggle_reaction_insert_error() {
+    let (tx, _) = broadcast::channel(1);
+    let msg_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find message
+        .append_query_results([vec![message::Model { id: msg_id, channel_id: None, server_id: None, user_id: Uuid::new_v4(), content: "M".to_string(), direct_message: None, created_at: Utc::now() }]])
+        // 2. Find reaction (Not Found)
+        .append_query_results([Vec::<message_reaction::Model>::new()])
+        // 3. Insert reaction (Fail)
+        .append_query_errors(vec![DbErr::Custom("Insert Fail".to_string())])
+        .into_connection();
+    
+    let req = ToggleReactionRequest { emoji: "\u{1F44D}".to_string() };
+    let res = message_service::toggle_reaction(&db, &tx, create_claims(Uuid::new_v4()), msg_id, req).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
 }

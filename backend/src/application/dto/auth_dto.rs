@@ -1,5 +1,6 @@
 use serde::{ Deserialize, Serialize };
 use crate::application::dto::server_dto::ServerItem;
+use crate::domain::models::user::UserStatus;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -53,6 +54,11 @@ pub struct LogoutResponse {
 pub struct MeRequest {
     pub id: Uuid,
     pub token: String
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateStatusPayload {
+    pub status: UserStatus,
 }
 
 #[derive(Debug, Serialize)]

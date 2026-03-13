@@ -1,16 +1,11 @@
 use axum::{ Json, http::StatusCode, response::IntoResponse, extract::State };
 use crate::AppState;
 use crate::application::services::auth_service;
-use crate::application::dto::auth_dto::{ LoginRequest, SignupRequest};
+use crate::application::dto::auth_dto::{ LoginRequest, SignupRequest, UpdateStatusPayload};
 use crate::application::dto::token_dto::Claims;
 use crate::domain::models::user::UserStatus;
 use serde::Deserialize;
 use serde_json::json;
-
-#[derive(Deserialize)]
-pub struct UpdateStatusPayload {
-    status: UserStatus,
-}
 
 pub async fn signup(State(state): State<AppState>, Json(payload): Json<SignupRequest> ) -> impl IntoResponse {
     match auth_service::register_user(&state.db, payload).await {
