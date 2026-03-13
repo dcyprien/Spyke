@@ -95,6 +95,10 @@ async fn main() {
     let cors = CorsLayer::new()
     .allow_origin([
         HeaderValue::from_static("http://localhost:3001"),
+        HeaderValue::from_static("http://localhost:3000"),
+        HeaderValue::from_static("tauri://localhost:3000"),
+        HeaderValue::from_static("app://localhost:3000"),
+        HeaderValue::from_static("asset://localhost:3000"),
     ])
     .allow_methods([
         Method::GET,
