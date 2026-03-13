@@ -20,7 +20,7 @@ export default function Navbar({ selectedServer }: Props) {
       const token = localStorage.getItem("access_token");
       
       if (token) {
-        await fetch("http://localhost:3000/auth/logout", {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -35,7 +35,7 @@ export default function Navbar({ selectedServer }: Props) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("username");
       
-      window.location.href = "http://localhost:3001";
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}`;
     }
   };
   

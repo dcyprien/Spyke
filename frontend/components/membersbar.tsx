@@ -116,7 +116,7 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
         }
 
         if (newRole) {
-            const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/members/${targetUserId}`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${activeServer.id}/members/${targetUserId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ new_role: newRole })
@@ -130,7 +130,7 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
 
         if (action === "kick") {
             if (!window.confirm(t.members_kick_confirm)) return;
-            const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${targetUserId}`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${activeServer.id}/ban/${targetUserId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ duration: 10 })
@@ -144,7 +144,7 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
 
         if (action === "permban") {
             if (!window.confirm(t.members_perm_ban_confirm)) return;
-            const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${targetUserId}`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${activeServer.id}/ban/${targetUserId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ duration: null })
@@ -173,7 +173,7 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
     const durationSeconds = val * multipliers[banUnit as "minutes" | "heures" | "jours"];
     const token = localStorage.getItem("access_token");
     try {
-        const res = await fetch(`http://localhost:3000/servers/${activeServer.id}/ban/${banModal.userId}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers/${activeServer.id}/ban/${banModal.userId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
             body: JSON.stringify({ duration: durationSeconds })

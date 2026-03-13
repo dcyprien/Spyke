@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await fetch("http://localhost:3000/me", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           wsRef.current.close();
       }
 
-      const wsUrl = "ws://localhost:3000/ws";
+      const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL}/ws`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -247,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token) {
         try {
             // Adaptez l'URL si votre route est différente (/auth/logout ou /logout)
-            await fetch("http://localhost:3000/auth/logout", {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
                 method: "POST",
                 headers: { 
                     "Authorization": `Bearer ${token}` 
