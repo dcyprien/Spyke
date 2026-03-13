@@ -207,6 +207,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             time: new Date(data.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
                             serverId: 0,
                             channelId: "",
+                            reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
                     }
@@ -623,7 +624,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                                 key={emoji}
                                 onClick={() => toggleReaction(msg.id, emoji)}
                                 className={`text-lg hover:scale-125 transition-transform rounded-full w-8 h-8 flex items-center justify-center hover:bg-white/10 ${
-                                    msg.reactions.find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
+                                    (msg.reactions || []).find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
                                 }`}
                             >
                                 {emoji}
@@ -633,7 +634,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                 )}
 
                 {/* --- RÉACTIONS AFFICHÉES --- */}
-                {msg.reactions.length > 0 && (
+                {(msg.reactions?.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                         {msg.reactions.map(r => (
                             <button
