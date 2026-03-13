@@ -38,7 +38,7 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
   const sendStatus = (newStatus: UserStatus) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
-    fetch("http://localhost:3000/auth/status", {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/status`, {
       method: "PUT",
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
@@ -97,7 +97,7 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
     try {
       const token = localStorage.getItem("access_token");
       if (token) {
-        await fetch("http://localhost:3000/auth/logout", {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({}),
@@ -107,7 +107,7 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
     finally {
       localStorage.removeItem("access_token");
       localStorage.removeItem("username");
-      window.location.href = "http://localhost:3001";
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}`;
     }
   };
 

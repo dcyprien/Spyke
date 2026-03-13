@@ -5,7 +5,7 @@ import { translations, Lang } from "../lib/i18n";
 
 interface LangState {
   lang: Lang;
-  t: typeof translations.fr;
+  t: typeof translations[Lang];
   toggleLang: () => void;
 }
 
