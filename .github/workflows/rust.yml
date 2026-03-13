@@ -147,8 +147,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'Chat App v__VERSION__'
+          tagName: v0.1.0
+          releaseName: 'Chat App v0.1.0'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: false
           prerelease: false
