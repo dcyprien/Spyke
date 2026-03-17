@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Server, Channel } from "./chatbar"; 
 import { useAuth } from "../app/context";
 import { useLang } from "../app/langContext";
+import { triggerSystemNotification } from "@/app/utils/notifications";
 
 type Reaction = {
   emoji: string;
@@ -210,6 +211,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
+                        triggerSystemNotification(t.chat_new_dm_title, t.chat_new_dm_user_placeholder(newMsg.author));
                     }
                     break;
                 case "dm_typing_start":
@@ -240,6 +242,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
+                        triggerSystemNotification("Nouveau message", "Nouveau message de " + newMsg.author + " dans " + selectedServer.name +"#" + selectedChannel.name);
                     }
                     break;
                 

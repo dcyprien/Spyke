@@ -343,7 +343,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
             activeTab === "servers" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
           }`}
         >
-          Serveurs
+        {t.nav_server_tab}
         </button>
         <button
           onClick={() => handleTabSwitch("dms")}
@@ -351,7 +351,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
             activeTab === "dms" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
           }`}
         >
-          Messages Privés
+          {t.nav_dm_tab}
         </button>
       </div>
 
@@ -561,11 +561,11 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
       {/* --- CONTENU ONGLET: MESSAGES PRIVÉS --- */}
       {activeTab === "dms" && (
         <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-gray-600">
-          <h2 className="text-white text-lg font-bold mb-4">Messages Privés</h2>
+          <h2 className="text-white text-lg font-bold mb-4">{t.nav_dm_tab}</h2>
 
           {dms.length === 0 ? (
             <div className="text-gray-400 text-sm text-center mt-10">
-              <p>Aucun message privé pour le moment.</p>
+              <p>{t.chat_dm_no_messages}</p>
             </div>
           ) : (
             <div className="space-y-1">

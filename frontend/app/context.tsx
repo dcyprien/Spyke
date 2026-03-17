@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { Server } from "../components/chatbar";
+import { triggerSystemNotification } from "./utils/notifications"; // Adapter le chemin relatif si besoin
 import { useLang } from "./langContext";
 
 export interface User {
@@ -126,11 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
               if (!parsed || !parsed.data) return;
               const data = parsed.data;
-
-              console.log(parsed.type, data); // Log de tous les événements pour debug
               // --- GESTION DU STATUT EN TEMPS RÉEL (Vert/Gris) ---
               if (parsed.type === "user_status_change") {
-                  console.log("⚡ Update Statut Reçu:", data); // Log de debug
                   setServers((prev: any[]) => prev.map(server => {
                       // Utiliser String() assure que 1 (number) == "1" (string)
                       if (String(server.id) === String(data.server_id)) {
@@ -154,8 +152,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   // Supprimer le membre de la liste ET notifier si c'est moi
                   const currentUserId = localStorage.getItem("current_user_id");
                   if (currentUserId && String(data.user_id) === String(currentUserId)) {
-                      setBanNotification({ message: "Vous avez été expulsé de ce serveur.", serverId: data.server_id });
-                      setServers((prev: any[]) => prev.filter((s: any) => s.id !== data.server_id));
+                        setBanNotification({ message: t.ban_offline_kicked(data.server_name), serverId: data.server_id });
+                        setServers((prev: any[]) => prev.filter((s: any) => s.id !== data.server_id));
+                        triggerSystemNotification(t.ban_label_kick, t.ban_offline_kicked(data.server_name));
                   } else {
                       setServers((prev: any[]) => prev.map((server: any) => {
                           if (server.id === data.server_id) {
@@ -171,23 +170,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   if (currentUserId && String(data.user_id) === String(currentUserId)) {
                       let msg: string;
                       if (!data.banned_until) {
-                          msg = "❌ Vous avez été banni définitivement de ce serveur. Vous ne pouvez plus le rejoindre.";
+                          msg = t.ban_permanent;
                       } else {
                           // Calculer la différence pour détecter un kick (10s)
                           const until = new Date(data.banned_until);
                           const diffSecs = Math.round((until.getTime() - Date.now()) / 1000);
                           if (diffSecs <= 15) {
-                              msg = "🚪 Vous avez été expulsé de ce serveur. Vous pourrez rejoindre dans quelques secondes.";
+                              msg = t.ban_offline_kicked(data.server_name);
                           } else {
                               const hours = Math.floor(diffSecs / 3600);
                               const days = Math.floor(diffSecs / 86400);
-                              if (days >= 1) msg = `⏳ Vous avez été banni temporairement pour ${days} jour(s).`;
-                              else if (hours >= 1) msg = `⏳ Vous avez été banni temporairement pour ${hours} heure(s).`;
-                              else msg = `⏳ Vous avez été banni temporairement pour ${Math.ceil(diffSecs / 60)} minute(s).`;
+                              if (days >= 1) msg = t.ban_offline_days(data.server_name, days);
+                              else if (hours >= 1) msg = t.ban_offline_hours(data.server_name, hours);
+                              else msg = t.ban_offline_minutes(data.server_name, Math.ceil(diffSecs / 60));
                           }
                       }
-                      setBanNotification({ message: msg, serverId: data.server_id });
-                      setServers((prev: any[]) => prev.filter((s: any) => s.id !== data.server_id));
+                        setBanNotification({ message: msg, serverId: data.server_id });
+                        triggerSystemNotification(t.ban_label, msg);
+                        setServers((prev: any[]) => prev.filter((s: any) => s.id !== data.server_id));
                   } else {
                       // Retirer le membre banni de la liste pour les autres
                       setServers((prev: any[]) => prev.map((server: any) => {
@@ -221,7 +221,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               
               // MODIFICATION ICI : On recharge tout pour gérer les changements de rôles (Admins/Owner)
               if (parsed.type === "member_updated") {
-                  console.log("🔄 Update Member reçue, rafraîchissement des permissions...");
                   await refreshUserData();
               }
 

@@ -35,7 +35,7 @@ export default function Navbar({ selectedServer }: Props) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("username");
       
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}`;
+      window.location.href = `${process.env.NEXT_PUBLIC_HOME_URL}`;
     }
   };
   
