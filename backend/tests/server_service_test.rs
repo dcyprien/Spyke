@@ -1154,11 +1154,13 @@ async fn test_ban_user_success_member() {
     let db = MockDatabase::new(DatabaseBackend::Postgres)
         // 1. Requester check (Owner)
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: owner_id, role: MemberRole::Owner }]])
-        // 2. Target check (Member) -> Should lead to a kick first
+        // 2. Server check (New query added in service)
+        .append_query_results(vec![vec![server_model::Model { id: srv_id, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
+        // 3. Target check (Member) -> Should lead to a kick first
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: target_id, role: MemberRole::Member }]])
-        // 3. Delete target membership
+        // 4. Delete target membership
         .append_exec_results(vec![MockExecResult { last_insert_id: 0, rows_affected: 1 }])
-        // 4. Insert ban
+        // 5. Insert ban
         .append_query_results(vec![vec![server_ban::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: target_id, banned_by: owner_id, banned_until: None }]])
         .into_connection();
 
@@ -1180,9 +1182,11 @@ async fn test_ban_user_success_non_member_temporary() {
     let db = MockDatabase::new(DatabaseBackend::Postgres)
         // 1. Requester check
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: owner_id, role: MemberRole::Owner }]])
-        // 2. Target check (Not a Member - returns empty array)
+        // 2. Server check
+        .append_query_results(vec![vec![server_model::Model { id: srv_id, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
+        // 3. Target check (Not a Member - returns empty array)
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
-        // 3. Delete step is skipped. Insert ban directly
+        // 4. Delete step is skipped. Insert ban directly
         .append_query_results(vec![vec![server_ban::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: target_id, banned_by: owner_id, banned_until: Some(chrono::Utc::now().naive_utc()) }]])
         .into_connection();
 
@@ -1199,6 +1203,8 @@ async fn test_ban_user_self() {
     let db = MockDatabase::new(DatabaseBackend::Postgres)
         // Pareil pour le ban, on bypass l'Owner
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: my_id, role: MemberRole::Admin }]])
+        // Server Check
+        .append_query_results(vec![vec![server_model::Model { id: 1, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id: my_id, invitcode: 1 }]])
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: my_id, role: MemberRole::Admin }]])
         .into_connection();
 
@@ -1223,6 +1229,7 @@ async fn test_ban_user_db_errors() {
     // Error on Reject Delete
     let db1 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: owner_id, role: MemberRole::Owner }]])
+        .append_query_results(vec![vec![server_model::Model { id: 1, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), role: MemberRole::Member }]])
         .append_exec_errors(vec![DbErr::Custom("Delete fail".to_string())])
         .into_connection();
@@ -1231,6 +1238,7 @@ async fn test_ban_user_db_errors() {
     // Error on Insert Ban
     let db2 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: owner_id, role: MemberRole::Owner }]])
+        .append_query_results(vec![vec![server_model::Model { id: 1, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
         .append_query_results(vec![vec![] as Vec<server_member::Model>]) // Target not member, skips delete
         .append_query_errors(vec![DbErr::Custom("Insert Fail".to_string())])
         .into_connection();
