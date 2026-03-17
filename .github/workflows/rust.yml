@@ -95,29 +95,15 @@ jobs:
           path: backend/target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install frontend dependencies (macOS)
-        if: matrix.platform == 'macos-latest'
-        run: |
-          cd frontend
-          npm ci
-
-      - name: Install frontend dependencies (Ubuntu)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          cd frontend
-          npm ci
-
-      - name: Install frontend dependencies (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: |
-          cd frontend
-          npm ci
-
       - name: Install system dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
 
       - name: Install Apple certificate and provisioning profile (macOS)
         if: matrix.platform == 'macos-latest'
@@ -138,13 +124,14 @@ jobs:
           fi
 
       - name: Build and Release Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v0.5.25
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: ./frontend
+          tauriScript: npm run tauri --
           tagName: v__VERSION__
           releaseName: 'Chat App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: false
           prerelease: false
-          projectPath: ./frontend/src-tauri
