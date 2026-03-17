@@ -854,6 +854,12 @@ pub async fn ban_user(
         .map_err(|e| AppError::InternalServerError(e.to_string()))?
         .ok_or(AppError::Forbidden("Not a member of this server".to_string()))?;
 
+    let server = server_model::Entity::find_by_id(server_id)
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::Forbidden("Not a member of this server".to_string()))?;
+
     if requester_membership.role != MemberRole::Owner && requester_membership.role != MemberRole::Admin {
         return Err(AppError::Forbidden("Only Owner or Admin can ban users".to_string()));
     }
@@ -908,7 +914,8 @@ pub async fn ban_user(
             "server_id": server_id,
             "user_id": user_id,
             "member_id": member_id_str,
-            "banned_until": banned_until.map(|d| d.to_string())
+            "banned_until": banned_until.map(|d| d.to_string()),
+            "server_name": server.name,
         }
     });
     

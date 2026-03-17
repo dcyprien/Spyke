@@ -2,16 +2,12 @@
 
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
+import { useLang } from "../app/langContext";
 import { authFetch } from "../lib/authFetch";
 
 type UserStatus = "online" | "offline" | "invisible";
-
 // Seulement 2 choix MANUELS : en ligne ou invisible
 // "offline" est géré automatiquement (fermeture / onglet caché)
-const manualOptions: { key: "online" | "invisible"; label: string; color: string }[] = [
-  { key: "online",    label: "En ligne",  color: "bg-green" },
-  { key: "invisible", label: "Invisible", color: "bg-grey-light" },
-];
 
 const dotColor: Record<UserStatus, string> = {
   online:    "bg-green",
@@ -28,12 +24,17 @@ type Props = {
 export default function UserControlPanel({ username: initialUsername, onStatusChange, mobileTab }: Props) {
   // "invisible" = choix manuel persisté ; sinon on bascule online/offline automatiquement
   const [invisible, setInvisible] = useState(false);
+  const { t } = useLang();
   // État affiché (calculé)
   const [status, setStatus] = useState<UserStatus>("online");
   const [statusOpen, setStatusOpen] = useState(false);
   const [avatar, setAvatar] = useState("/images/user.png");
   const [username, setUsername] = useState<string>(initialUsername || "");
 
+  const manualOptions: { key: "online" | "invisible"; label: string; color: string }[] = [
+    { key: "online",    label: t.user_status_online,  color: "bg-green" },
+    { key: "invisible", label: t.user_status_invisible, color: "bg-grey-light" },
+  ];
   // Helper : envoie le statut au backend en mode keepalive (fonctionne même à la fermeture)
   const sendStatus = (newStatus: UserStatus) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -107,7 +108,7 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
     finally {
       localStorage.removeItem("access_token");
       localStorage.removeItem("username");
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}`;
+      window.location.href = `${process.env.NEXT_PUBLIC_HOME_URL || "http://localhost:3001"}`;
     }
   };
 
@@ -169,7 +170,7 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
               "border-gray-500 text-gray-400 bg-gray-500/10"
             }`}>
               <span className={`w-2 h-2 rounded-full ${dotColor[status]}`} />
-              {status === "online" ? "En ligne" : status === "invisible" ? "Invisible" : "Hors ligne"}
+              {status === "online" ? t.user_status_online : status === "invisible" ? t.user_status_invisible : t.user_status_offline}
             </span>
           </div>
 
@@ -207,7 +208,7 @@ export default function UserControlPanel({ username: initialUsername, onStatusCh
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              Se déconnecter
+              {t.nav_signout}
             </button>
           </div>
         </div>
