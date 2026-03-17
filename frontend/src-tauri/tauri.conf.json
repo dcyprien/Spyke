@@ -2,28 +2,26 @@
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:3001",
+    "devPath": "http://localhost:3000",
     "distDir": "../out"
   },
-  "app": {
-    "windows": [
-      {
-        "fullscreen": false,
-        "height": 600,
-        "resizable": true,
-        "title": "Chat App",
-        "width": 800
-      }
-    ],
+    "package": {
+        "productName": "Chat App",
+        "version": "0.1.0"
+    },
+    "tauri": {
+      "windows": [
+        {
+          "fullscreen": false,
+          "height": 600,
+          "resizable": true,
+          "title": "Chat App",
+          "width": 800
+        }
+      ],
     "security": {
-      "csp": null
-    }
-  },
-  "package": {
-    "productName": "Chat App",
-    "version": "0.1.0"
-  },
-  "tauri": {
+    "csp": null
+    },
     "allowlist": {
         "dialog":{
             "all": true
@@ -52,9 +50,6 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ]
-    },
-    "security": {
-      "csp": null
     }
   }
 }
