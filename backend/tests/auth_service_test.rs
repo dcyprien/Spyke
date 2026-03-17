@@ -247,39 +247,65 @@ async fn test_login_existing_token_valid() {
 
 #[tokio::test]
 async fn test_login_existing_token_expired() {
-    setup_env();
-    let user_id = Uuid::new_v4();
+    setup_env(); // <--- AJOUT DE CETTE LIGNE
+
+    let (tx, _rx) = broadcast::channel(1);
     let hash = generate_hash("pwd");
+    let user_id = Uuid::new_v4();
+    let token_id = Uuid::new_v4();
 
     let db = MockDatabase::new(DatabaseBackend::Postgres)
-        // 1. User
-        .append_query_results(vec![
-            vec![user::Model { id: user_id, username: "u".to_string(), password_hash: hash, status: UserStatus::Offline, display_name: None, avatar_url: None }],
-        ])
-        // 2. Status Online
-        .append_query_results(vec![
-             vec![user::Model { id: user_id, username: "u".to_string(), password_hash: "".to_string(), status: UserStatus::Online, display_name: None, avatar_url: None }]
-        ])
-        // 3. Memberships
+        // 1. Find User by username
+        .append_query_results(vec![vec![user::Model { 
+            id: user_id, username: "u".to_string(), password_hash: hash, 
+            status: UserStatus::Offline, display_name: None, avatar_url: None 
+        }]])
+        // 2. Update user status -> Online
+        .append_query_results(vec![vec![user::Model { 
+            id: user_id, username: "u".to_string(), password_hash: "x".to_string(), 
+            status: UserStatus::Online, display_name: None, avatar_url: None 
+        }]])
+        // 3. Find Memberships & Servers for broadcast
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
-        // 4. Token Existant EXPIRÉ
-        .append_query_results(vec![
-            vec![refresh_token::Model { id: Uuid::new_v4(), user_id, token: "exp".to_string(), expires_at: (Utc::now() - Duration::hours(1)).into(), created_at: Utc::now().into() }]
-        ])
-        // 5. Delete old
+        // 4. Find existing refresh token
+        .append_query_results(vec![vec![refresh_token::Model { 
+            id: token_id, user_id, token: "old_tok".to_string(), 
+            expires_at: (Utc::now() - Duration::days(1)).into(),
+            created_at: (Utc::now() - Duration::days(2)).into() 
+        }]])
+        // 5. Delete expired token execution
         .append_exec_results(vec![MockExecResult { last_insert_id: 0, rows_affected: 1 }])
-        // 6. Insert new
-        .append_query_results(vec![
-            vec![refresh_token::Model { id: Uuid::new_v4(), user_id, token: "new".to_string(), expires_at: (Utc::now() + Duration::hours(48)).into(), created_at: Utc::now().into() }]
-        ])
+        // 6. Insert new refresh token (Postgres RETURNING mock)
+        .append_query_results(vec![vec![refresh_token::Model { 
+            id: Uuid::new_v4(), user_id, token: "new_tok".to_string(), 
+            expires_at: (Utc::now() + Duration::days(7)).into(),
+            created_at: Utc::now().into()
+        }]])
         .into_connection();
 
-    let (tx, _) = broadcast::channel(1);
     let req = LoginRequest { username: "u".to_string(), password: "pwd".to_string() };
+    
     let res = auth_service::login_user(&db, &tx, req).await;
+    
+    match &res {
+        Ok(response) => {
+            assert!(!response.access_token.is_empty());
+        }
+        Err(e) => panic!("Expected Ok, got Err: {:?}", e),
+    }
+}
 
-    assert!(res.is_ok());
-    assert_ne!(res.unwrap().access_token, "exp");
+#[tokio::test]
+async fn test_login_db_error() {
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_exec_errors(vec![DbErr::Custom("DB Fail".to_string())])
+        .into_connection();
+
+    let claims = Claims { sub: Uuid::new_v4(), username: "u".to_string(), exp: 0, iat: 0 };
+     let (tx, _) = broadcast::channel(1); // AJOUT DU CHANNEL
+    let res = auth_service::logout_user(&db, &tx, claims).await;
+
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
 }
 
 // --- SUITE 3 : LOGOUT ---
@@ -397,9 +423,9 @@ async fn test_me_success_complex_structure() {
             }]
         ])
         // 2. Find Members (UserID) JOIN Server.
-        // SeaORM Mock retourne des tuples pour les joins (Model, Some(RelatedModel))
+        // AJOUT DES PARENTHÈSES ICI POUR FORMER LE TUPLE
         .append_query_results(vec![
-            vec![(
+            vec![ (
                 server_member::Model { 
                     id: Uuid::new_v4(), 
                     server_id: server_id, 
@@ -414,7 +440,7 @@ async fn test_me_success_complex_structure() {
                     invitcode: 12345,
                     owner_id: user_id,
                 })
-            )]
+            ) ]
         ])
         // 3. Find Channels (IN [100])
         .append_query_results(vec![
@@ -532,13 +558,16 @@ async fn test_login_corrupt_password_hash() {
 async fn test_login_find_refresh_token_db_error() {
     // Couvre Line 78: User trouvé, Password OK, mais Crash en cherchant le token
     let hash = generate_hash("pwd");
+    let user_id = Uuid::new_v4();
     let db = MockDatabase::new(DatabaseBackend::Postgres)
-        .append_query_results(vec![vec![user::Model { id: Uuid::new_v4(), username: "u".to_string(), password_hash: hash, status: UserStatus::Offline, display_name: None, avatar_url: None }]])
+        .append_query_results(vec![vec![user::Model { id: user_id, username: "u".to_string(), password_hash: hash, status: UserStatus::Offline, display_name: None, avatar_url: None }]])
+        .append_query_results(vec![vec![user::Model { id: user_id, username: "u".to_string(), password_hash: "x".to_string(), status: UserStatus::Online, display_name: None, avatar_url: None }]])
+        .append_query_results(vec![vec![] as Vec<server_member::Model>])
         .append_query_errors(vec![DbErr::Custom("Find Token Fail".to_string())])
         .into_connection();
 
     let req = LoginRequest { username: "u".to_string(), password: "pwd".to_string() };
-     let (tx, _) = broadcast::channel(1); // AJOUT DU CHANNEL
+    let (tx, _) = broadcast::channel(1);
     assert!(matches!(auth_service::login_user(&db, &tx, req).await, Err(AppError::InternalServerError(_))));
 }
 
@@ -550,17 +579,21 @@ async fn test_login_delete_expired_token_exec_error() {
     let db = MockDatabase::new(DatabaseBackend::Postgres)
         // 1. User
         .append_query_results(vec![vec![user::Model { id: user_id, username: "u".to_string(), password_hash: hash, status: UserStatus::Offline, display_name: None, avatar_url: None }]])
-        // 2. Token Expiré
+        // 2. Update Status
+        .append_query_results(vec![vec![user::Model { id: user_id, username: "u".to_string(), password_hash: "x".to_string(), status: UserStatus::Online, display_name: None, avatar_url: None }]])
+        // 3. Memberships
+        .append_query_results(vec![vec![] as Vec<server_member::Model>])
+        // 4. Token Expiré
         .append_query_results(vec![vec![refresh_token::Model {
             id: Uuid::new_v4(), user_id, token: "exp".to_string(), 
             expires_at: (Utc::now() - Duration::hours(1)).into(), created_at: Utc::now().into()
         }]])
-        // 3. Delete Error
+        // 5. Delete Error
         .append_exec_errors(vec![DbErr::Custom("Delete Token Fail".to_string())])
         .into_connection();
 
     let req = LoginRequest { username: "u".to_string(), password: "pwd".to_string() };
-         let (tx, _) = broadcast::channel(1); // AJOUT DU CHANNEL
+    let (tx, _) = broadcast::channel(1); 
     assert!(matches!(auth_service::login_user(&db, &tx,  req).await, Err(AppError::InternalServerError(_))));
 }
 
@@ -662,4 +695,131 @@ async fn test_me_fetch_members_error() {
 
     let claims = Claims { sub: user_id, username: "u".to_string(), exp: 0, iat: 0 };
     assert!(matches!(auth_service::me(&db, claims).await, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_me_fetch_bans_error() {
+    // Couvre le .map_err sur raw_bans dans "me"
+    let user_id = Uuid::new_v4();
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![user::Model {
+            id: user_id, username: "u".to_string(), password_hash: "x".to_string(),
+            status: UserStatus::Online, display_name: None, avatar_url: None
+        }]])
+        .append_query_results(vec![vec![(
+            server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id, role: backend::domain::models::server_member::MemberRole::Owner },
+            Some(server_model::Model { id: 1, name: "S".to_string(), description: "D".to_string(), icon_url: None, owner_id: user_id, invitcode: 1 })
+        )]])
+        .append_query_results(vec![vec![] as Vec<channel::Model>]) // Channels OK
+        .append_query_results(vec![vec![] as Vec<(server_member::Model, Option<user::Model>)>]) // Members OK
+        // Crash au moment des bans
+        .append_query_errors(vec![DbErr::Custom("Fetch Bans Fail".to_string())])
+        .into_connection();
+
+    let claims = Claims { sub: user_id, username: "u".to_string(), exp: 0, iat: 0 };
+    assert!(matches!(auth_service::me(&db, claims).await, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_login_generate_token_error() {
+    // Couvre l'échec de la fonction "generate_token(...)"
+    let _lock = ENV_LOCK.lock().unwrap();
+    env::remove_var("JWT_SECRET"); // On supprime la variable pour forcer l'erreur JWT
+
+    let hash = generate_hash("pwd");
+    let user_id = Uuid::new_v4();
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![user::Model { id: user_id, username: "u".to_string(), password_hash: hash, status: UserStatus::Offline, display_name: None, avatar_url: None }]])
+        .append_query_results(vec![vec![user::Model { id: user_id, username: "u".to_string(), password_hash: "".to_string(), status: UserStatus::Online, display_name: None, avatar_url: None }]])
+        .append_query_results(vec![vec![] as Vec<server_member::Model>])
+        // Aucun token existant
+        .append_query_results(vec![vec![] as Vec<refresh_token::Model>])
+        .into_connection();
+
+    let (tx, _) = broadcast::channel(1);
+    let req = LoginRequest { username: "u".to_string(), password: "pwd".to_string() };
+    let res = auth_service::login_user(&db, &tx, req).await;
+
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+    
+    setup_env(); // On remet l'env var pour pas casser les autres tests en parallèle
+}
+
+// --- SUITE : UPDATE USER STATUS ---
+
+#[tokio::test]
+async fn test_update_user_status_success() {
+    let (tx, mut rx) = broadcast::channel(1);
+    let user_id = Uuid::new_v4();
+    
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Find User
+        .append_query_results(vec![vec![user::Model {
+            id: user_id, username: "u".to_string(), password_hash: "x".to_string(),
+            status: UserStatus::Online, display_name: None, avatar_url: None
+        }]])
+        // 2. Update status (Postgres RETURNING mock)
+        .append_query_results(vec![vec![user::Model {
+            id: user_id, username: "u".to_string(), password_hash: "x".to_string(),
+            status: UserStatus::Invisible, display_name: None, avatar_url: None
+        }]])
+        // 3. Find memberships for broadcast loop
+        .append_query_results(vec![vec![server_member::Model {
+            id: Uuid::new_v4(), server_id: 1, user_id, role: backend::domain::models::server_member::MemberRole::Member
+        }]])
+        .into_connection();
+
+    let res = auth_service::update_user_status(&db, &tx, user_id, UserStatus::Invisible).await;
+    assert!(res.is_ok());
+    
+    // Vérification du broadcast
+    let msg = rx.recv().await.unwrap();
+    assert!(msg.contains("invisible"));
+}
+
+#[tokio::test]
+async fn test_update_user_status_not_found() {
+    let (tx, _) = broadcast::channel(1);
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![] as Vec<user::Model>])
+        .into_connection();
+
+    let res = auth_service::update_user_status(&db, &tx, Uuid::new_v4(), UserStatus::Online).await;
+    assert!(matches!(res, Err(AppError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn test_update_user_status_update_error() {
+    let (tx, _) = broadcast::channel(1);
+    let user_id = Uuid::new_v4();
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![user::Model {
+            id: user_id, username: "u".to_string(), password_hash: "x".to_string(),
+            status: UserStatus::Online, display_name: None, avatar_url: None
+        }]])
+        .append_query_errors(vec![DbErr::Custom("Update Fail".to_string())])
+        .into_connection();
+
+    let res = auth_service::update_user_status(&db, &tx, user_id, UserStatus::Online).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
+}
+
+#[tokio::test]
+async fn test_update_user_status_membership_error() {
+    let (tx, _) = broadcast::channel(1);
+    let user_id = Uuid::new_v4();
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![user::Model {
+            id: user_id, username: "u".to_string(), password_hash: "x".to_string(),
+            status: UserStatus::Online, display_name: None, avatar_url: None
+        }]])
+        .append_query_results(vec![vec![user::Model {
+            id: user_id, username: "u".to_string(), password_hash: "x".to_string(),
+            status: UserStatus::Offline, display_name: None, avatar_url: None
+        }]])
+        .append_query_errors(vec![DbErr::Custom("Fetch Memberships Fail".to_string())])
+        .into_connection();
+
+    let res = auth_service::update_user_status(&db, &tx, user_id, UserStatus::Offline).await;
+    assert!(matches!(res, Err(AppError::InternalServerError(_))));
 }
