@@ -45,7 +45,7 @@ export default function Navbar({ selectedServer }: Props) {
 
         {/* Logo */}
         <a className="flex items-center gap-2">
-          <Image src="/images/spyke-logo.png" alt="Spyke Logo" width={32} height={32} className="rounded-full" />
+          <Image src="/images/spyke-logo.png" alt="Spyke Logo" width={31} height={31} className="rounded-full" />
           <span className="text-xl text-heading font-semibold">pyke</span>
         </a>
 
