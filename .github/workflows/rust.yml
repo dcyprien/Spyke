@@ -143,7 +143,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./frontend
-          tauriScript: npm run tauri --debug
+          tauriScript: npm run tauri --
+          args: --debug
           tagName: v__VERSION__
           releaseName: 'Spyke v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
