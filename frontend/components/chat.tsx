@@ -400,11 +400,11 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
           if (!res.ok) {
               // Revert si erreur (simple reload ou revert manual)
               const err = await res.json();
-              alert(err.error || "Erreur modification");
+              alert(err.error || t.chat_edit_error);
           }
            // Si succès, le WebSocket BROADCAST confirmera à tout le monde (y compris nous)
       } catch (e) {
-          console.error("Erreur update", e);
+          console.error(t.chat_update_error, e);
       }
   };
   // -----------------------------------
@@ -519,11 +519,31 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
   };
 
   return (
-    <div className={`flex flex-col h-screen bg-[#001952]
-      pt-16 pb-16 md:pt-20 md:pb-0 px-4
-      md:ml-64 ${selectedServer ? "lg:mr-64" : ""}
-      ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
-    `}>
+    <div
+      className={`flex flex-col h-screen relative overflow-hidden
+        pt-16 pb-16 md:pt-20 md:pb-0 px-4
+        md:ml-64 ${selectedServer ? "lg:mr-64" : ""}
+        ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
+      `}
+    >
+      {/* Background images - responsive */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Mobile background */}
+        <div
+          className="absolute inset-0 md:hidden bg-cover bg-center bg-no-repeat pointer-events-none"
+          style={{ backgroundImage: 'url(/images/phone.webp)' }}
+        ></div>
+        {/* Desktop background */}
+        <div
+          className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat pointer-events-none"
+          style={{ backgroundImage: 'url(/images/pc.avif)' }}
+        ></div>
+        {/* Overlay pour améliorer la lisibilité */}
+        <div className="absolute inset-0 bg-black/40 pointer-events-none"></div>
+      </div>
+
+      {/* Contenu */}
+      <div className="relative z-10 flex flex-col h-full pointer-events-auto">
       {/* Header */}
       <div className="py-3 border-b border-white/10 mb-4 flex items-center justify-center">
         <h3 className="text-white font-bold text-lg">
@@ -795,7 +815,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
               <input
                 autoFocus
                 type="text"
-                placeholder="Rechercher un GIF..."
+                placeholder={t.chat_gif_search}
                 value={gifSearch}
                 onChange={e => setGifSearch(e.target.value)}
                 className="flex-1 bg-black/40 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan placeholder-gray-500"
@@ -847,6 +867,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
             </div>
           </div>
         )}
+
+      </div>
 
       </div>
     </div>
