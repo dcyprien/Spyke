@@ -164,7 +164,7 @@ pub async fn send_dm(
             "author_username": user_info.username.clone(),
             "direct_message_id": dm_id.to_string(), 
             "target_users": [claims.sub.to_string(), target_user_id.to_string()], // <-- LIGNE AJOUTÉE ICI
-            "created_at": saved_msg.created_at.to_string()
+            "created_at": saved_msg.created_at.to_rfc3339()
         }
     });
     let _ = tx.send(ws_payload.to_string());
