@@ -119,7 +119,7 @@ export const translations = {
     chat_send_btn: "Envoyer",
     chat_send_placeholder: "Envoyer dans #",
     chat_new_dm_title: "Nouveau message privé",
-    chat_new_dm_user_placeholder: "Nouveau message de ",
+    chat_new_dm_user_placeholder: (author: String) => `Nouveau message privé de ${author}`,
     chat_new_message: "Nouveau message",
     chat_new_message_placeholder: (author: string, server: String, channel: String) => `"Nouveau message de ${author} dans ${server}#${channel}."`,
     chat_dm_no_messages: "Aucun message privé pour le moment.",

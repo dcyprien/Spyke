@@ -6,6 +6,7 @@ on:
 
 jobs:
   mirror:
+    if : github.repository == 'EpitechMscProPromo2028/T-DEV-600-NAN_2'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -16,17 +17,14 @@ jobs:
       - name: Push to Private Repo
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PRIVATE_REPO_KEY }}
-          # 👇 Mets l'URL SSH de TON repo privé ici 👇
           TARGET_REPO: "git@github.com:dcyprien/testCD-T-DEV.git"
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           
-          # On dit à la machine de faire confiance à GitHub
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           
-          # On ajoute ton repo privé comme destination et on pousse !
           git remote add mirror "$TARGET_REPO"
           git push mirror --force --all
           git push mirror --force --tags

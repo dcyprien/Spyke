@@ -13,6 +13,7 @@ env:
 jobs:
   test-backend:
     name: Test Rust Backend
+    if : github.repository == 'EpitechMscProPromo2028/T-DEV-600-NAN_2'
     runs-on: ubuntu-latest
 
     steps:
@@ -50,8 +51,8 @@ jobs:
 
   build-tauri:
     name: Build Tauri App
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'EpitechMscProPromo2028/T-DEV-600-NAN_2'
     needs: test-backend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     permissions:
       contents: write
@@ -140,9 +141,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0.5.25
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_GIPHY_API_KEY: ${{ secrets.NEXT_PUBLIC_GIPHY_API_KEY }}
+          NEXT_PUBLIC_WS_URL: ${{ secrets.NEXT_PUBLIC_WS_URL }}
         with:
           projectPath: ./frontend
-          tauriScript: npm run tauri --
+          tauriScript: npx tauri
           tagName: v__VERSION__
           releaseName: 'Spyke v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
