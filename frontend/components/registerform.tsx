@@ -3,10 +3,28 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLang } from "../app/langContext";
 import { buildApiUrl } from "../lib/api";
+import { TranslationKey } from "../lib/i18n";
 
 type Props = {
   switchToLogin: () => void;
 };
+
+// Helper function to get the right translation key for an error
+function getErrorKey(status: number, errorMsg: string): TranslationKey | null {
+  const msg = errorMsg.toLowerCase();
+
+  if (status === 400 || msg.includes("already exists")) {
+    return "register_username_exists";
+  }
+  if (status === 400 || msg.includes("invalid")) {
+    return "register_invalid_data";
+  }
+  if (status >= 500) {
+    return "register_server_error";
+  }
+
+  return null; // Retourne null si pas de correspondance
+}
 
 export default function RegisterForm({ switchToLogin }: Props) {
   const [firstName, setFirstName] = useState("");
@@ -15,44 +33,46 @@ export default function RegisterForm({ switchToLogin }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string>("");
+  const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const { t } = useLang();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setErrorKey(null);
+    setErrorMessage("");
     setIsLoading(true);
 
     // Validate username
     if (!username.trim()) {
-      setError(t.register_username_required || "Veuillez entrer un identifiant");
+      setErrorKey("register_username_required");
       setIsLoading(false);
       return;
     }
 
     if (username.length < 3) {
-      setError(t.register_username_short || "L'identifiant doit contenir au moins 3 caractères");
+      setErrorKey("register_username_short");
       setIsLoading(false);
       return;
     }
 
     if (!password.trim()) {
-      setError(t.register_password_required || "Veuillez entrer un mot de passe");
+      setErrorKey("register_password_required");
       setIsLoading(false);
       return;
     }
 
     // Validate password length
     if (password.length < 8) {
-      setError(t.register_pw_short || "Le mot de passe doit contenir au moins 8 caractères");
+      setErrorKey("register_pw_short");
       setIsLoading(false);
       return;
     }
 
     // Validate password match
     if (password !== confirmPassword) {
-      setError(t.register_pw_mismatch || "Les mots de passe ne correspondent pas");
+      setErrorKey("register_pw_mismatch");
       setIsLoading(false);
       return;
     }
@@ -76,27 +96,28 @@ export default function RegisterForm({ switchToLogin }: Props) {
             errorMsg = txt;
           }
 
-          // Handle specific errors
-          if (res.status === 400 || errorMsg.toLowerCase().includes("already exists")) {
-            throw new Error(t.register_username_exists || "Cet identifiant existe déjà");
-          } else if (res.status === 400 || errorMsg.toLowerCase().includes("invalid")) {
-            throw new Error(t.register_invalid_data || "Données invalides");
-          } else if (res.status >= 500) {
-            throw new Error(t.register_server_error || "Erreur serveur. Veuillez réessayer.");
-          } else {
-            throw new Error(errorMsg || "Erreur d'inscription");
-          }
+          const errorKey = getErrorKey(res.status, errorMsg);
+          throw new Error(JSON.stringify({ key: errorKey, fallback: errorMsg }));
         }
         return res.json();
       })
       .then((data) => {
-        setError("");
+        setErrorKey(null);
         // Show success message
-        alert(t.register_success || "Inscription réussie! Vous pouvez maintenant vous connecter.");
+        alert(t.register_success);
         switchToLogin();
       })
       .catch((err) => {
-        setError(err.message || "Une erreur est survenue");
+        try {
+          const errorData = JSON.parse(err.message);
+          setErrorKey(errorData.key || null);
+          if (!errorData.key && errorData.fallback) {
+            setErrorMessage(errorData.fallback);
+          }
+        } catch {
+          setErrorKey(null);
+          setErrorMessage("Une erreur est survenue");
+        }
       })
       .finally(() => {
         setIsLoading(false);
@@ -112,11 +133,11 @@ export default function RegisterForm({ switchToLogin }: Props) {
       </h1>
 
       {/* Error message display */}
-      {error && (
+      {(errorKey || errorMessage) && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
           <p className="font-semibold flex items-center gap-2">
             <span>⚠️</span>
-            {error}
+            {errorKey ? t[errorKey] : errorMessage}
           </p>
         </div>
       )}

@@ -3,32 +3,55 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../app/context";
 import { useLang } from "../app/langContext";
+import { TranslationKey } from "../lib/i18n";
 
 type Props = {
   switchToRegister: () => void;
 };
 
+// Helper function to get the right translation key for an error
+function getErrorKey(status: number, errorMsg: string): TranslationKey | null {
+  const msg = errorMsg.toLowerCase();
+
+  if (status === 401 || msg.includes("invalid") || msg.includes("unauthorized")) {
+    return "login_invalid_credentials";
+  }
+  if (status === 404 || msg.includes("not found")) {
+    return "login_user_not_found";
+  }
+  if (status === 429) {
+    return "login_too_many_attempts";
+  }
+  if (status >= 500) {
+    return "login_server_error";
+  }
+
+  return null; // Retourne null si pas de correspondance
+}
+
 export default function LoginForm({ switchToRegister }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string>("");
+  const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const { t } = useLang();
   const { refreshUserData, connectWs } = useAuth();
 
  const handleSubmit = (e: React.FormEvent) => {
   e.preventDefault();
-  setError("");
+  setErrorKey(null);
+  setErrorMessage("");
   setIsLoading(true);
 
   if (!username.trim()) {
-    setError(t.login_username_required || "Veuillez entrer votre identifiant");
+    setErrorKey("login_username_required");
     setIsLoading(false);
     return;
   }
 
   if (!password.trim()) {
-    setError(t.login_password_required || "Veuillez entrer votre mot de passe");
+    setErrorKey("login_password_required");
     setIsLoading(false);
     return;
   }
@@ -53,18 +76,8 @@ export default function LoginForm({ switchToRegister }: Props) {
           errorMsg = text;
         }
 
-        // Handle specific errors
-        if (res.status === 401 || errorMsg.toLowerCase().includes("invalid") || errorMsg.toLowerCase().includes("unauthorized")) {
-          throw new Error(t.login_invalid_credentials || "Identifiant ou mot de passe incorrect");
-        } else if (res.status === 404 || errorMsg.toLowerCase().includes("not found")) {
-          throw new Error(t.login_user_not_found || "Cet identifiant n'existe pas");
-        } else if (res.status === 429) {
-          throw new Error(t.login_too_many_attempts || "Trop de tentatives. Réessayez plus tard.");
-        } else if (res.status >= 500) {
-          throw new Error(t.login_server_error || "Erreur serveur. Veuillez réessayer.");
-        } else {
-          throw new Error(errorMsg || "Erreur de connexion");
-        }
+        const errorKey = getErrorKey(res.status, errorMsg);
+        throw new Error(JSON.stringify({ key: errorKey, fallback: errorMsg }));
       }
       return res.json();
     })
@@ -72,7 +85,9 @@ export default function LoginForm({ switchToRegister }: Props) {
       // expected: { access_token, refresh_token, id, username }
 
       if (!data.access_token) {
-        throw new Error(t.login_no_token || "Erreur: Pas de token reçu");
+        setErrorKey("login_no_token");
+        setIsLoading(false);
+        return;
       }
 
       localStorage.setItem("access_token", data.access_token);
@@ -91,7 +106,16 @@ export default function LoginForm({ switchToRegister }: Props) {
       router.push("/main");
     })
     .catch((err) => {
-      setError(err.message || "Une erreur est survenue");
+      try {
+        const errorData = JSON.parse(err.message);
+        setErrorKey(errorData.key || null);
+        if (!errorData.key && errorData.fallback) {
+          setErrorMessage(errorData.fallback);
+        }
+      } catch {
+        setErrorKey(null);
+        setErrorMessage("Une erreur est survenue");
+      }
     })
     .finally(() => {
       setIsLoading(false);
@@ -107,11 +131,11 @@ export default function LoginForm({ switchToRegister }: Props) {
       </h1>
 
       {/* Error message display */}
-      {error && (
+      {(errorKey || errorMessage) && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
           <p className="font-semibold flex items-center gap-2">
             <span>⚠️</span>
-            {error}
+            {errorKey ? t[errorKey] : errorMessage}
           </p>
         </div>
       )}

@@ -26,6 +26,7 @@ export const translations = {
     login_too_many_attempts: "Trop de tentatives. Réessayez plus tard.",
     login_server_error: "Erreur serveur. Veuillez réessayer.",
     login_no_token: "Erreur: Pas de token reçu",
+    login_generic_error: "Une erreur est survenue",
 
     // Register
     register_title: "Inscription",
@@ -45,6 +46,7 @@ export const translations = {
     register_username_exists: "Cet identifiant existe déjà",
     register_invalid_data: "Données invalides",
     register_server_error: "Erreur serveur. Veuillez réessayer.",
+    register_generic_error: "Une erreur est survenue",
 
     // Chatbar
     chatbar_servers: "Serveurs",
@@ -175,6 +177,7 @@ export const translations = {
     login_too_many_attempts: "Too many attempts. Please try again later.",
     login_server_error: "Server error. Please try again.",
     login_no_token: "Error: No token received",
+    login_generic_error: "An error occurred",
 
     // Register
     register_title: "Register",
@@ -194,6 +197,7 @@ export const translations = {
     register_username_exists: "This username already exists",
     register_invalid_data: "Invalid data",
     register_server_error: "Server error. Please try again.",
+    register_generic_error: "An error occurred",
 
     // Chatbar
     chatbar_servers: "Servers",

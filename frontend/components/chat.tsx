@@ -520,7 +520,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
     <div
       className={`flex flex-col h-screen relative overflow-hidden
         pt-16 pb-16 md:pt-20 md:pb-0 px-4
-        md:ml-64 ${selectedServer ? "lg:mr-64" : ""}
+        md:ml-64 ${selectedServer ? "xl:mr-64" : ""}
         ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
       `}
     >
@@ -541,17 +541,17 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
       </div>
 
       {/* Contenu */}
-      <div className="relative z-10 flex flex-col h-full pointer-events-auto">
+      <div className="relative z-0 flex flex-col h-full pointer-events-auto">
       {/* Header */}
-      <div className="py-3 border-b border-white/10 mb-4 flex items-center justify-center">
+      <div className="py-3 border-b border-white/10 mb-4 flex flex-col items-center justify-center">
         <h3 className="text-white font-bold text-lg">
-          {selectedChannel 
-            ? `# ${selectedChannel.name}` 
-            : activeDMUser 
-              ? `💬 Message privé avec ${activeDMUser.name}` 
+          {selectedChannel
+            ? `# ${selectedChannel.name}`
+            : activeDMUser
+              ? `💬 Message privé avec ${activeDMUser.name}`
               : t.chat_select_channel}
         </h3>
-        {selectedServer && <span className="text-blue-gray text-xs bg-dark-navy px-2 py-1 rounded ml-2">{selectedServer.name}</span>}
+        {selectedServer && <span className="text-blue-gray text-xs bg-dark-navy px-2 py-1 rounded mt-2">{selectedServer.name}</span>}
       </div>
 
       {/* Historique */}
