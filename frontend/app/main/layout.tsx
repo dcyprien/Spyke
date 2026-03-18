@@ -16,7 +16,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const [username, setUsername] = useState<string>("");
   const [userStatus, setUserStatus] = useState<UserStatus>("online");
   const { banNotification, clearBanNotification, setServers } = useAuth();
-  
+
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>("channels");
@@ -24,6 +24,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   // NOUVEAUX ÉTATS POUR GÉRER L'ONGLET ET LE DM
   const [activeTab, setActiveTab] = useState<"servers" | "dms">("servers");
   const [activeDMUser, setActiveDMUser] = useState<{ id: string; name: string } | null>(null);
+  const [showMembersOnTablet, setShowMembersOnTablet] = useState(false);
 
 
   // Si on est banni/expulsé du serveur actuellement sélectionné, le désélectionner
@@ -106,6 +107,19 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
       )}
+
+      {/* Bouton flottant membersbar (visible en md-lg seulement) */}
+      {activeTab === "servers" && selectedServer && (
+        <button
+          onClick={() => setShowMembersOnTablet(!showMembersOnTablet)}
+          className="fixed bottom-20 right-4 z-40 hidden md:flex lg:flex xl:hidden bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition"
+          title={showMembersOnTablet ? "Masquer les membres" : "Afficher les membres"}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      )}
       
       <ChatBar 
         onServerSelect={handleServerSelect} 
@@ -119,12 +133,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       
       {/* On n'affiche la barre des membres que sur l'onglet Serveurs */}
       {activeTab === "servers" && (
-        <MembersBar 
-          userStatus={userStatus} 
-          selectedServer={selectedServer} 
-          selectedChannel={selectedChannel} 
+        <MembersBar
+          userStatus={userStatus}
+          selectedServer={selectedServer}
+          selectedChannel={selectedChannel}
           onStartDM={handleStartDM}
           mobileTab={mobileTab}
+          showOnTablet={showMembersOnTablet}
+          onTabletClose={() => setShowMembersOnTablet(false)}
         />
       )}
 

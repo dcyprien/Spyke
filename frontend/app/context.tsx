@@ -137,7 +137,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                               members: (server.members || []).map((m: any) => {
                                   // Comparaison sécurisée user_id
                                   if (String(m.user_id) === String(data.user_id)) {
-                                      return { ...m, status: data.status }; 
+                                      return { ...m, status: data.status };
+                                  }
+                                  return m;
+                              })
+                          };
+                      }
+                      return server;
+                  }));
+              }
+              // ---------------------------------------------------
+
+              // --- GESTION DU CHANGEMENT D'AVATAR EN TEMPS RÉEL ---
+              if (parsed.type === "user_avatar_change") {
+                  setServers((prev: any[]) => prev.map(server => {
+                      if (String(server.id) === String(data.server_id)) {
+                          return {
+                              ...server,
+                              members: (server.members || []).map((m: any) => {
+                                  if (String(m.user_id) === String(data.user_id)) {
+                                      return { ...m, avatar_url: data.avatar_url };
                                   }
                                   return m;
                               })

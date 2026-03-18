@@ -15,6 +15,7 @@ use crate::application::utils::jwt::{ generate_token };
 use crate::application::dto::token_dto::Claims;
 use tokio::sync::broadcast;
 use serde_json::json;
+use std::io::Cursor;
 
 pub async fn register_user(db: &DatabaseConnection, req: SignupRequest) -> Result<SignupResponse, AppError> {
     if req.password.len() < 8 {
@@ -391,4 +392,86 @@ pub async fn update_user_status(
     }
 
     Ok(())
+}
+
+pub async fn update_avatar(
+    db: &DatabaseConnection,
+    tx: &broadcast::Sender<String>,
+    user_id: Uuid,
+    image_data: Vec<u8>,
+) -> Result<String, AppError> {
+    // Validate image
+    if image_data.is_empty() || image_data.len() > 5 * 1024 * 1024 {
+        return Err(AppError::BadRequest("Image size invalid (max 5MB)".to_string()));
+    }
+
+    // Load and convert to PNG
+    let img = image::load_from_memory(&image_data)
+        .map_err(|_| AppError::BadRequest("Invalid image format".to_string()))?;
+
+    // Resize if needed to keep it reasonable (max 512x512)
+    let img = if img.width() > 512 || img.height() > 512 {
+        img.thumbnail(512, 512)
+    } else {
+        img
+    };
+
+    // Generate unique filename
+    let filename = format!("avatar_{}.png", Uuid::new_v4());
+    let file_path = format!("./uploads/avatars/{}", filename);
+
+    // Create uploads directory if it doesn't exist
+    let dir_path = "./uploads/avatars";
+    tokio::fs::create_dir_all(dir_path)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to create directory: {}", e)))?;
+
+    // Convert to PNG and save
+    let png_data = Vec::new();
+    let mut cursor = Cursor::new(png_data);
+    img.write_to(&mut cursor, image::ImageFormat::Png)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to convert image to PNG: {}", e)))?;
+    let png_data = cursor.into_inner();
+
+    tokio::fs::write(&file_path, &png_data)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to save file: {}", e)))?;
+
+    // Construct the URL
+    let avatar_url = format!("/uploads/avatars/{}", filename);
+
+    // Update user in database
+    let user = user::Entity::find_by_id(user_id)
+        .one(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        .ok_or(AppError::NotFound("User not found".to_string()))?;
+
+    let mut active_user: user::ActiveModel = user.into();
+    active_user.avatar_url = Set(Some(avatar_url.clone()));
+    active_user
+        .update(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    // Broadcast the avatar change to all servers where user is a member
+    let memberships = server_member::Entity::find()
+        .filter(server_member::Column::UserId.eq(user_id))
+        .all(db)
+        .await
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    for member in memberships {
+        let payload = json!({
+            "type": "user_avatar_change",
+            "data": {
+                "server_id": member.server_id,
+                "user_id": user_id,
+                "avatar_url": avatar_url
+            }
+        });
+        let _ = tx.send(payload.to_string());
+    }
+
+    Ok(avatar_url)
 }

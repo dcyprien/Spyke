@@ -48,12 +48,6 @@ export default function Navbar({ selectedServer }: Props) {
           <Image src="/images/spyke-logo.png" alt="Spyke Logo" width={32} height={32} className="rounded-full" />
           <span className="text-xl text-heading font-semibold">pyke</span>
         </a>
-
-        {/* Channel name – centre, desktop only */}
-        <div className="hidden md:block text-heading text-sm font-medium">
-          {selectedServer ? `# ${selectedServer.name}` : t.nav_no_server}
-        </div>
-
         {/* Actions */}
         <div className="flex items-center gap-2">
           {/* Langue */}
