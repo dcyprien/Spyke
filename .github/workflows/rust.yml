@@ -13,6 +13,7 @@ env:
 jobs:
   test-backend:
     name: Test Rust Backend
+    if : github.repository == 'EpitechMscProPromo2028/T-DEV-600-NAN_2'
     runs-on: ubuntu-latest
 
     steps:
@@ -50,8 +51,8 @@ jobs:
 
   build-tauri:
     name: Build Tauri App
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && github.repository == 'EpitechMscProPromo2028/T-DEV-600-NAN_2'
     needs: test-backend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     
     permissions:
       contents: write
