@@ -113,9 +113,6 @@ jobs:
           else
             exit 1
           fi
-
-      - name: Build and Release Tauri app
-        uses: tauri-apps/tauri-action@v0.5.25
           
       - name: Install frontend dependencies
         run: npm ci
