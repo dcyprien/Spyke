@@ -242,7 +242,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
-                        triggerSystemNotification("Nouveau message", "Nouveau message de " + newMsg.author + " dans " + selectedServer.name +"#" + selectedChannel.name);
+                        if (data.user_id !== user?.id)
+                            triggerSystemNotification(t.chat_new_message, t.chat_new_message_placeholder(newMsg.author, selectedServer.name, selectedChannel.name ));
                     }
                     break;
                 

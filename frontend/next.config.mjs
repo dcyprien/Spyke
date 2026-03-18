@@ -11,7 +11,7 @@ const nextConfig = {
         // ⚠️ Permet au build de passer même s'il y a des erreurs de typage.
         ignoreBuildErrors: true,
     },
-    output: 'standalone',
+    output: 'export',
 };
 
 export default nextConfig;
