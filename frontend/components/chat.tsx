@@ -231,6 +231,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
 
                 case "new_message":             
                     if (selectedChannel && String(data.channel_id) === String(selectedChannel.id)) {
+                        console.log(data);
                         const newMsg: Message = {
                             id: String(data.id),
                             author: data.author_username || data.user_id,
