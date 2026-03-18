@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLang } from "../app/langContext";
+import { buildApiUrl } from "../lib/api";
 
 type Props = {
   switchToLogin: () => void;
@@ -36,11 +37,9 @@ export default function RegisterForm({ switchToLogin }: Props) {
       alert(t.register_username_required);
       return;
     }
-    
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
     // backend SignupRequest expects { username, password }
-    fetch(`${apiUrl}/auth/signup`, {
+    fetch(buildApiUrl("/auth/signup"), {
       method: "POST",
       headers: { "Content-Type": "application/json" ,},
       body: JSON.stringify({ username, password }),
