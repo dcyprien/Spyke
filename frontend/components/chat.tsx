@@ -132,10 +132,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
 
   // Bloque scroll body
   useEffect(() => {
-    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
     return () => {
-      document.documentElement.style.overflow = "";
       document.body.style.overflow = "";
     };
   }, []);

@@ -328,7 +328,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
   return (
     <>
       <div className={`
-        fixed left-0 bg-[#001839] border-r border-[#3D3D3D] flex-col p-4 z-10 shadow-lg
+        fixed left-0 bg-[#001839] border-r border-[#3D3D3D] flex-col p-4 z-40 shadow-lg
         top-16 w-full h-[calc(100vh-8rem)]
         md:w-64 md:h-[calc(100vh-4rem)]
         ${mobileTab === "channels" ? "flex" : "hidden"}
@@ -593,8 +593,8 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
 
       {/* MODAL CRÉATION */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
-          <div className="bg-[#1E1E2E] p-6 rounded-xl w-96 border border-[#3D3D3D] shadow-2xl">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in">
+          <div className="bg-[#1E1E2E] p-6 rounded-xl w-96 border border-[#3D3D3D] shadow-2xl pointer-events-auto">
             <h3 className="text-white text-xl font-bold mb-4">{t.chatbar_modal_new_server}</h3>
             
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">{t.chatbar_modal_name}</label>
