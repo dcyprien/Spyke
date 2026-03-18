@@ -96,6 +96,7 @@ async fn main() {
     .allow_origin([
         HeaderValue::from_static("http://localhost:3001"),
         HeaderValue::from_static("http://localhost:3000"),
+        HeaderValue::from_static("tauri://localhost"),
         HeaderValue::from_static("tauri://localhost:3000"),
         HeaderValue::from_static("app://localhost:3000"),
         HeaderValue::from_static("asset://localhost:3000"),
@@ -113,11 +114,14 @@ async fn main() {
     ])
     .allow_credentials(true);
 
-
-    let app = Router::new()
+    // Public routes without authentication
+    let public_routes = Router::new()
         .route("/auth/signup", post(auth::signup))
         .route("/auth/login", post(auth::login))
-        .route("/ws",get(websocket::ws_handler))
+        .route("/ws", get(websocket::ws_handler));
+
+    let app = Router::new()
+        .merge(public_routes)
         .merge(protected_routes)
         .layer(cors)
         .with_state(state);

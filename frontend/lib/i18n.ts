@@ -109,6 +109,12 @@ export const translations = {
     chat_new_message: "Nouveau message",
     chat_new_message_placeholder: (author: string, server: String, channel: String) => `"Nouveau message de ${author} dans ${server}#${channel}."`,
     chat_dm_no_messages: "Aucun message privé pour le moment.",
+    chat_gif_search: "Rechercher un GIF...",
+    chat_gif_trending: "GIFs tendance",
+    chat_edit_save: "Sauvegarder",
+    chat_edit_cancel: "Annuler",
+    chat_edit_error: "Erreur lors de la modification",
+    chat_update_error: "Erreur lors de la mise à jour",
 
     // Ban notifications (context)
     ban_label_kick: "Expulsion",
@@ -240,6 +246,12 @@ export const translations = {
     chat_new_message: "New message",
     chat_new_message_placeholder: (author: string, server: String, channel: String) => `"New message from ${author} in ${server}#${channel}."`,
     chat_dm_no_messages: "No direct messages yet.",
+    chat_gif_search: "Search for a GIF...",
+    chat_gif_trending: "Trending GIFs",
+    chat_edit_save: "Save",
+    chat_edit_cancel: "Cancel",
+    chat_edit_error: "Error while editing",
+    chat_update_error: "Error while updating",
 
     // Ban notifications (context)
     ban_label_kick: "Kick",
