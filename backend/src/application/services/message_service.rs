@@ -69,7 +69,7 @@ pub async fn send_message(
             "author_username": user_info.username, // Pseudo pour le WS
             "server_id": saved_msg.server_id,
             "channel_id": saved_msg.channel_id,
-            "created_at": saved_msg.created_at.to_string()
+            "created_at": saved_msg.created_at.to_rfc3339()
         }
     });
     let _ = tx.send(ws_payload.to_string());
