@@ -19,6 +19,13 @@ export const translations = {
     login_no_account: "Pas de compte ?",
     login_register_link: "S'inscrire",
     login_error: "Erreur de connexion : ",
+    login_username_required: "Veuillez entrer votre identifiant",
+    login_password_required: "Veuillez entrer votre mot de passe",
+    login_invalid_credentials: "Identifiant ou mot de passe incorrect",
+    login_user_not_found: "Cet identifiant n'existe pas",
+    login_too_many_attempts: "Trop de tentatives. Réessayez plus tard.",
+    login_server_error: "Erreur serveur. Veuillez réessayer.",
+    login_no_token: "Erreur: Pas de token reçu",
 
     // Register
     register_title: "Inscription",
@@ -33,6 +40,11 @@ export const translations = {
     register_pw_mismatch: "Les mots de passe ne correspondent pas",
     register_pw_short: "Le mot de passe doit contenir au moins 8 caractères",
     register_username_required: "Le nom d'utilisateur est requis",
+    register_password_required: "Veuillez entrer un mot de passe",
+    register_username_short: "L'identifiant doit contenir au moins 3 caractères",
+    register_username_exists: "Cet identifiant existe déjà",
+    register_invalid_data: "Données invalides",
+    register_server_error: "Erreur serveur. Veuillez réessayer.",
 
     // Chatbar
     chatbar_servers: "Serveurs",
@@ -156,6 +168,13 @@ export const translations = {
     login_no_account: "No account?",
     login_register_link: "Sign up",
     login_error: "Login error: ",
+    login_username_required: "Please enter your username",
+    login_password_required: "Please enter your password",
+    login_invalid_credentials: "Invalid username or password",
+    login_user_not_found: "This username does not exist",
+    login_too_many_attempts: "Too many attempts. Please try again later.",
+    login_server_error: "Server error. Please try again.",
+    login_no_token: "Error: No token received",
 
     // Register
     register_title: "Register",
@@ -170,6 +189,11 @@ export const translations = {
     register_pw_mismatch: "Passwords do not match",
     register_pw_short: "Password must be at least 8 characters",
     register_username_required: "Username is required",
+    register_password_required: "Please enter a password",
+    register_username_short: "Username must be at least 3 characters",
+    register_username_exists: "This username already exists",
+    register_invalid_data: "Invalid data",
+    register_server_error: "Server error. Please try again.",
 
     // Chatbar
     chatbar_servers: "Servers",

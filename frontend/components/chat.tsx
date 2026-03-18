@@ -525,16 +525,16 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
       `}
     >
       {/* Background images - responsive */}
-      <div className="absolute inset-0 pointer-events-none">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Mobile background */}
         <div
           className="absolute inset-0 md:hidden bg-cover bg-center bg-no-repeat pointer-events-none"
-          style={{ backgroundImage: 'url(/images/phone.webp)' }}
+          style={{ backgroundImage: 'url(/images/phone.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }}
         ></div>
         {/* Desktop background */}
         <div
           className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat pointer-events-none"
-          style={{ backgroundImage: 'url(/images/pc.avif)' }}
+          style={{ backgroundImage: 'url(/images/pc.jpg)', backgroundSize: 'cover', backgroundPosition: 'center' }}
         ></div>
         {/* Overlay pour améliorer la lisibilité */}
         <div className="absolute inset-0 bg-black/40 pointer-events-none"></div>
