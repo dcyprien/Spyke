@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Server, Channel } from "./chatbar"; 
 import { useAuth } from "../app/context";
 import { useLang } from "../app/langContext";
+import { triggerSystemNotification } from "@/app/utils/notifications";
 
 type Reaction = {
   emoji: string;
@@ -131,10 +132,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
 
   // Bloque scroll body
   useEffect(() => {
-    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
     return () => {
-      document.documentElement.style.overflow = "";
       document.body.style.overflow = "";
     };
   }, []);
@@ -207,8 +206,10 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             time: new Date(data.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
                             serverId: 0,
                             channelId: "",
+                            reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
+                        triggerSystemNotification(t.chat_new_dm_title, t.chat_new_dm_user_placeholder(newMsg.author));
                     }
                     break;
                 case "dm_typing_start":
@@ -228,6 +229,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
 
                 case "new_message":             
                     if (selectedChannel && String(data.channel_id) === String(selectedChannel.id)) {
+                        console.log(data);
                         const newMsg: Message = {
                             id: String(data.id),
                             author: data.author_username || data.user_id,
@@ -239,6 +241,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             reactions: [],
                         };
                         setMessages((prev) => [...prev, newMsg]);
+                        if (data.user_id !== user?.id)
+                            triggerSystemNotification(t.chat_new_message, t.chat_new_message_placeholder(newMsg.author, selectedServer.name, selectedChannel.name ));
                     }
                     break;
                 
@@ -396,11 +400,11 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
           if (!res.ok) {
               // Revert si erreur (simple reload ou revert manual)
               const err = await res.json();
-              alert(err.error || "Erreur modification");
+              alert(err.error || t.chat_edit_error);
           }
            // Si succès, le WebSocket BROADCAST confirmera à tout le monde (y compris nous)
       } catch (e) {
-          console.error("Erreur update", e);
+          console.error(t.chat_update_error, e);
       }
   };
   // -----------------------------------
@@ -515,21 +519,41 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
   };
 
   return (
-    <div className={`flex flex-col h-screen bg-[#001952]
-      pt-16 pb-16 md:pt-20 md:pb-0 px-4
-      md:ml-64 ${selectedServer ? "lg:mr-64" : ""}
-      ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
-    `}>
+    <div
+      className={`flex flex-col h-screen relative overflow-hidden
+        pt-16 pb-16 md:pt-20 md:pb-0 px-4
+        md:ml-64 ${selectedServer ? "xl:mr-64" : ""}
+        ${mobileTab !== "chat" ? "hidden md:flex" : "flex"}
+      `}
+    >
+      {/* Background images - responsive */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Mobile background */}
+        <div
+          className="absolute inset-0 md:hidden bg-cover bg-center bg-no-repeat pointer-events-none"
+          style={{ backgroundImage: 'url(/images/phone.webp)', backgroundSize: 'cover', backgroundPosition: 'center' }}
+        ></div>
+        {/* Desktop background */}
+        <div
+          className="absolute inset-0 hidden md:block bg-cover bg-center bg-no-repeat pointer-events-none"
+          style={{ backgroundImage: 'url(/images/1.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}
+        ></div>
+        {/* Overlay pour améliorer la lisibilité */}
+        <div className="absolute inset-0 bg-black/40 pointer-events-none"></div>
+      </div>
+
+      {/* Contenu */}
+      <div className="relative z-0 flex flex-col h-full pointer-events-auto">
       {/* Header */}
-      <div className="py-3 border-b border-white/10 mb-4 flex items-center justify-center">
+      <div className="py-3 border-b border-white/10 mb-4 flex flex-col items-center justify-center">
         <h3 className="text-white font-bold text-lg">
-          {selectedChannel 
-            ? `# ${selectedChannel.name}` 
-            : activeDMUser 
-              ? `💬 Message privé avec ${activeDMUser.name}` 
+          {selectedChannel
+            ? `# ${selectedChannel.name}`
+            : activeDMUser
+              ? `💬 Message privé avec ${activeDMUser.name}`
               : t.chat_select_channel}
         </h3>
-        {selectedServer && <span className="text-blue-gray text-xs bg-dark-navy px-2 py-1 rounded ml-2">{selectedServer.name}</span>}
+        {selectedServer && <span className="text-blue-gray text-xs bg-dark-navy px-2 py-1 rounded mt-2">{selectedServer.name}</span>}
       </div>
 
       {/* Historique */}
@@ -569,7 +593,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                             }}
                         />
                         <div className="flex gap-2 text-[10px]">
-                            <span className="text-gray-400">Entrée pour valider • Echap pour annuler</span>
+                            <span className="text-gray-400">{t.chat_edit_hint}</span>
                         </div>
                     </div>
                 ) : isGifUrl(msg.content) ? (
@@ -623,7 +647,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                                 key={emoji}
                                 onClick={() => toggleReaction(msg.id, emoji)}
                                 className={`text-lg hover:scale-125 transition-transform rounded-full w-8 h-8 flex items-center justify-center hover:bg-white/10 ${
-                                    msg.reactions.find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
+                                    (msg.reactions || []).find(r => r.emoji === emoji)?.userIds.includes(user?.id ?? "") ? "bg-white/20" : ""
                                 }`}
                             >
                                 {emoji}
@@ -633,7 +657,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
                 )}
 
                 {/* --- RÉACTIONS AFFICHÉES --- */}
-                {msg.reactions.length > 0 && (
+                {(msg.reactions?.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                         {msg.reactions.map(r => (
                             <button
@@ -735,7 +759,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
             selectedChannel 
               ? `${t.chat_send_placeholder} # ${selectedChannel.name}` 
               : activeDMUser 
-                ? `Envoyer un message à ${activeDMUser.name}...` 
+                ? t.chat_dm_send_placeholder(activeDMUser.name)
                 : "..."
           }
           disabled={!selectedChannel && !activeDMUser}
@@ -791,7 +815,7 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
               <input
                 autoFocus
                 type="text"
-                placeholder="Rechercher un GIF..."
+                placeholder={t.chat_gif_search}
                 value={gifSearch}
                 onChange={e => setGifSearch(e.target.value)}
                 className="flex-1 bg-black/40 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-cyan placeholder-gray-500"
@@ -843,6 +867,8 @@ export default function Chat({ selectedServer, selectedChannel, mobileTab, activ
             </div>
           </div>
         )}
+
+      </div>
 
       </div>
     </div>

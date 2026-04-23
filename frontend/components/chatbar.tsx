@@ -328,7 +328,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
   return (
     <>
       <div className={`
-        fixed left-0 bg-[#001839] border-r border-[#3D3D3D] flex-col p-4 z-10 shadow-lg
+        fixed left-0 bg-[#001839] border-r border-[#3D3D3D] flex-col p-4 z-40 shadow-lg
         top-16 w-full h-[calc(100vh-8rem)]
         md:w-64 md:h-[calc(100vh-4rem)]
         ${mobileTab === "channels" ? "flex" : "hidden"}
@@ -343,7 +343,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
             activeTab === "servers" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
           }`}
         >
-          Serveurs
+        {t.nav_server_tab}
         </button>
         <button
           onClick={() => handleTabSwitch("dms")}
@@ -351,7 +351,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
             activeTab === "dms" ? "bg-blue-600 text-white shadow" : "text-gray-400 hover:text-white hover:bg-white/5"
           }`}
         >
-          Messages Privés
+          {t.nav_dm_tab}
         </button>
       </div>
 
@@ -360,7 +360,7 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
         <>
           {/* --- ZONE CRÉATION / JOIN --- */}
           <div className="mb-4 space-y-2">
-            <h2 className="text-white text-lg font-bold mb-2">{t.chatbar_servers}</h2>
+            <h2 className="text-white text-lg font-bold mb-2 text-center">{t.chatbar_servers}</h2>
             
             <button 
                 onClick={() => setShowCreateModal(true)} 
@@ -561,11 +561,11 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
       {/* --- CONTENU ONGLET: MESSAGES PRIVÉS --- */}
       {activeTab === "dms" && (
         <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-gray-600">
-          <h2 className="text-white text-lg font-bold mb-4">Messages Privés</h2>
+          <h2 className="text-white text-lg font-bold mb-4 text-center">{t.nav_dm_tab}</h2>
 
           {dms.length === 0 ? (
             <div className="text-gray-400 text-sm text-center mt-10">
-              <p>Aucun message privé pour le moment.</p>
+              <p>{t.chat_dm_no_messages}</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -593,9 +593,9 @@ export default function ServerBar({ onServerSelect, onChannelSelect, mobileTab, 
 
       {/* MODAL CRÉATION */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
-          <div className="bg-[#1E1E2E] p-6 rounded-xl w-96 border border-[#3D3D3D] shadow-2xl">
-            <h3 className="text-white text-xl font-bold mb-4">{t.chatbar_modal_new_server}</h3>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in">
+          <div className="bg-[#1E1E2E] p-6 rounded-xl w-96 border border-[#3D3D3D] shadow-2xl pointer-events-auto">
+            <h3 className="text-white text-xl font-bold mb-4 text-center">{t.chatbar_modal_new_server}</h3>
             
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">{t.chatbar_modal_name}</label>
             <input 

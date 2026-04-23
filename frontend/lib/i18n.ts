@@ -8,6 +8,8 @@ export const translations = {
     nav_signout: "Déconnexion",
     nav_no_server: "Aucun serveur",
     nav_lang_switch: "English",
+    nav_server_tab: "Serveurs",
+    nav_dm_tab: "Messages privés",
 
     // Login
     login_title: "Connexion",
@@ -17,6 +19,14 @@ export const translations = {
     login_no_account: "Pas de compte ?",
     login_register_link: "S'inscrire",
     login_error: "Erreur de connexion : ",
+    login_username_required: "Veuillez entrer votre identifiant",
+    login_password_required: "Veuillez entrer votre mot de passe",
+    login_invalid_credentials: "Identifiant ou mot de passe incorrect",
+    login_user_not_found: "Cet identifiant n'existe pas",
+    login_too_many_attempts: "Trop de tentatives. Réessayez plus tard.",
+    login_server_error: "Erreur serveur. Veuillez réessayer.",
+    login_no_token: "Erreur: Pas de token reçu",
+    login_generic_error: "Une erreur est survenue",
 
     // Register
     register_title: "Inscription",
@@ -31,6 +41,12 @@ export const translations = {
     register_pw_mismatch: "Les mots de passe ne correspondent pas",
     register_pw_short: "Le mot de passe doit contenir au moins 8 caractères",
     register_username_required: "Le nom d'utilisateur est requis",
+    register_password_required: "Veuillez entrer un mot de passe",
+    register_username_short: "L'identifiant doit contenir au moins 3 caractères",
+    register_username_exists: "Cet identifiant existe déjà",
+    register_invalid_data: "Données invalides",
+    register_server_error: "Erreur serveur. Veuillez réessayer.",
+    register_generic_error: "Une erreur est survenue",
 
     // Chatbar
     chatbar_servers: "Serveurs",
@@ -102,8 +118,21 @@ export const translations = {
     chat_delete: "Supprimer",
     chat_send_btn: "Envoyer",
     chat_send_placeholder: "Envoyer dans #",
+    chat_new_dm_title: "Nouveau message privé",
+    chat_new_dm_user_placeholder: (author: String) => `Nouveau message privé de ${author}`,
+    chat_new_message: "Nouveau message",
+    chat_new_message_placeholder: (author: string, server: String, channel: String) => `"Nouveau message de ${author} dans ${server}#${channel}."`,
+    chat_dm_no_messages: "Aucun message privé pour le moment.",
+    chat_gif_search: "Rechercher un GIF...",
+    chat_gif_trending: "GIFs tendance",
+    chat_edit_save: "Sauvegarder",
+    chat_edit_cancel: "Annuler",
+    chat_edit_error: "Erreur lors de la modification",
+    chat_update_error: "Erreur lors de la mise à jour",
 
     // Ban notifications (context)
+    ban_label_kick: "Expulsion",
+    ban_label: "Bannissement",
     ban_kicked: "🚪 Vous avez été expulsé de ce serveur. Vous pourrez rejoindre dans quelques secondes.",
     ban_permanent: "❌ Vous avez été banni définitivement de ce serveur. Vous ne pouvez plus le rejoindre.",
     ban_temp_days: (d: number) => `⏳ Vous avez été banni temporairement pour ${d} jour(s).`,
@@ -118,6 +147,28 @@ export const translations = {
     // Main layout
     layout_ban_title: "Action du serveur",
     layout_ban_ok: "OK",
+
+    // Userbar
+    user_status_online: "En ligne",
+    user_status_offline: "Hors ligne",
+    user_status_invisible: "Invisible",
+    user_avatar_upload_title: "Changer la photo de profil",
+    user_avatar_select_image: "Veuillez sélectionner une image",
+    user_avatar_size_error: "L'image ne doit pas dépasser 5MB",
+    user_avatar_upload_error: "Erreur lors de l'upload",
+    user_avatar_uploading: "Upload en cours...",
+    user_avatar_cancel: "Annuler",
+    user_avatar_send: "Envoyer",
+    user_avatar_connection_error: "Erreur de connexion",
+    user_status_label: "Statut",
+
+    // Load states
+    login_connecting: "Connexion...",
+    register_connecting: "Inscription...",
+
+    // Chat
+    chat_edit_hint: "Entrée pour valider • Echap pour annuler",
+    chat_dm_send_placeholder: (name: string) => `Envoyer un message à ${name}...`,
   },
 
   en: {
@@ -125,6 +176,8 @@ export const translations = {
     nav_signout: "Sign out",
     nav_no_server: "No server",
     nav_lang_switch: "Français",
+    nav_server_tab: "Servers",
+    nav_dm_tab: "DMs",
 
     // Login
     login_title: "Sign in",
@@ -134,6 +187,14 @@ export const translations = {
     login_no_account: "No account?",
     login_register_link: "Sign up",
     login_error: "Login error: ",
+    login_username_required: "Please enter your username",
+    login_password_required: "Please enter your password",
+    login_invalid_credentials: "Invalid username or password",
+    login_user_not_found: "This username does not exist",
+    login_too_many_attempts: "Too many attempts. Please try again later.",
+    login_server_error: "Server error. Please try again.",
+    login_no_token: "Error: No token received",
+    login_generic_error: "An error occurred",
 
     // Register
     register_title: "Register",
@@ -148,6 +209,12 @@ export const translations = {
     register_pw_mismatch: "Passwords do not match",
     register_pw_short: "Password must be at least 8 characters",
     register_username_required: "Username is required",
+    register_password_required: "Please enter a password",
+    register_username_short: "Username must be at least 3 characters",
+    register_username_exists: "This username already exists",
+    register_invalid_data: "Invalid data",
+    register_server_error: "Server error. Please try again.",
+    register_generic_error: "An error occurred",
 
     // Chatbar
     chatbar_servers: "Servers",
@@ -219,8 +286,21 @@ export const translations = {
     chat_delete: "Delete",
     chat_send_btn: "Send",
     chat_send_placeholder: "Send in #",
+    chat_new_dm_title: "New direct message",
+    chat_new_dm_user_placeholder: (author: String) => `"New direct message from ${author}"`,
+    chat_new_message: "New message",
+    chat_new_message_placeholder: (author: string, server: String, channel: String) => `"New message from ${author} in ${server}#${channel}."`,
+    chat_dm_no_messages: "No direct messages yet.",
+    chat_gif_search: "Search for a GIF...",
+    chat_gif_trending: "Trending GIFs",
+    chat_edit_save: "Save",
+    chat_edit_cancel: "Cancel",
+    chat_edit_error: "Error while editing",
+    chat_update_error: "Error while updating",
 
     // Ban notifications (context)
+    ban_label_kick: "Kick",
+    ban_label: "Ban",
     ban_kicked: "🚪 You have been kicked from this server. You can rejoin in a few seconds.",
     ban_permanent: "❌ You have been permanently banned from this server. You can no longer join.",
     ban_temp_days: (d: number) => `⏳ You have been temporarily banned for ${d} day(s).`,
@@ -235,6 +315,28 @@ export const translations = {
     // Main layout
     layout_ban_title: "Server action",
     layout_ban_ok: "OK",
+
+    // Userbar
+    user_status_online: "Online",
+    user_status_offline: "Offline",
+    user_status_invisible: "Invisible",
+    user_avatar_upload_title: "Change profile picture",
+    user_avatar_select_image: "Please select an image",
+    user_avatar_size_error: "Image must not exceed 5MB",
+    user_avatar_upload_error: "Upload error",
+    user_avatar_uploading: "Uploading...",
+    user_avatar_cancel: "Cancel",
+    user_avatar_send: "Send",
+    user_avatar_connection_error: "Connection error",
+    user_status_label: "Status",
+
+    // Load states
+    login_connecting: "Signing in...",
+    register_connecting: "Registering...",
+
+    // Chat
+    chat_edit_hint: "Enter to validate • Esc to cancel",
+    chat_dm_send_placeholder: (name: string) => `Send a message to ${name}...`,
   },
 } as const;
 

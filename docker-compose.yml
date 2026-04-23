@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: db
     restart: always
     environment:
@@ -15,9 +15,8 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: backend
-    command: cargo watch -x run
     volumes:
       - ./backend:/app
       - /app/target
@@ -41,11 +40,11 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_API_PUBLIC_URL}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     ports:
       - "3001:3000"
-    depends_on:
-      - backend
+    # depends_on:
+    #   - backend
 
 volumes:
   db_data:

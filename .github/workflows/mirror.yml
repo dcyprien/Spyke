@@ -1,0 +1,30 @@
+name: Mirror to Private Repo
+
+on:
+  push:
+    branches: [ "master", "main" ]
+
+jobs:
+  mirror:
+    if : github.repository == 'EpitechMscProPromo2028/T-DEV-600-NAN_2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Push to Private Repo
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRIVATE_REPO_KEY }}
+          TARGET_REPO: "git@github.com:dcyprien/testCD-T-DEV.git"
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          
+          git remote add mirror "$TARGET_REPO"
+          git push mirror --force --all
+          git push mirror --force --tags

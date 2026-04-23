@@ -6,6 +6,7 @@ use axum::{
 };
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 use axum::http::{Method, HeaderValue};
 use sea_orm::{Database, DatabaseConnection};
 use std::env;
@@ -66,6 +67,7 @@ async fn main() {
     .route("/me", get(auth::me))
     .route("/auth/logout", post(auth::logout))
     .route("/auth/status", put(auth::update_status))
+    .route("/auth/avatar", post(auth::upload_avatar))
     .route("/servers", post(server::create_server)
                         .get(server::get_servers))
     .route("/servers/{id}", get(server::get_server_by_id)
@@ -96,9 +98,10 @@ async fn main() {
     .allow_origin([
         HeaderValue::from_static("http://localhost:3001"),
         HeaderValue::from_static("http://localhost:3000"),
+        HeaderValue::from_static("https://tauri.localhost"),
         HeaderValue::from_static("tauri://localhost"),
         HeaderValue::from_static("app://localhost"),
-        HeaderValue::from_static("https:://tauri.localhost"),
+        HeaderValue::from_static("asset://localhost"),
     ])
     .allow_methods([
         Method::GET,
@@ -113,11 +116,15 @@ async fn main() {
     ])
     .allow_credentials(true);
 
-
-    let app = Router::new()
+    // Public routes without authentication
+    let public_routes = Router::new()
         .route("/auth/signup", post(auth::signup))
         .route("/auth/login", post(auth::login))
-        .route("/ws",get(websocket::ws_handler))
+        .route("/ws", get(websocket::ws_handler))
+        .nest_service("/uploads", ServeDir::new("uploads"));
+
+    let app = Router::new()
+        .merge(public_routes)
         .merge(protected_routes)
         .layer(cors)
         .with_state(state);

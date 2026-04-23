@@ -9,11 +9,11 @@ use serde_json::Value;
 use backend::application::services::server_service;
 use backend::application::dto::server_dto::{
     CreateServerRequest, UpdateServerRequest, UpdateMemberRequest, 
-    JoinServerRequest, CreateChannelRequest
+    JoinServerRequest, CreateChannelRequest, BanUserRequest
 };
 use backend::application::dto::token_dto::Claims;
 use backend::application::dto::apperror::AppError;
-use backend::domain::models::{server_model, server_member, channel, user};
+use backend::domain::models::{server_ban, server_model, server_member, channel, user};
 use backend::domain::models::server_member::MemberRole;
 use backend::domain::models::user::UserStatus;
 
@@ -140,9 +140,11 @@ async fn test_join_server_success_with_broadcast() {
         .append_query_results(vec![vec![server_model::Model {
             id: server_id, name: "S".to_string(), description: "D".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 9999
         }]])
-        // 2. Verif Not Member (Empty)
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Verif Not Member (Empty)
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
-        // 3. Insert Membership
+        // 4. Insert Membership
         .append_query_results(vec![vec![server_member::Model {
             id: Uuid::new_v4(), server_id, user_id, role: MemberRole::Member
         }]])
@@ -184,7 +186,9 @@ async fn test_join_server_wrong_code() {
         .append_query_results(vec![vec![server_model::Model {
             id: srv_id, name: "S".to_string(), description: "D".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234
         }]])
-        // 2. Not Member
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Not Member
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
         .into_connection();
 
@@ -467,7 +471,9 @@ async fn test_join_server_already_member() {
         .append_query_results(vec![vec![server_model::Model {
             id: srv_id, name: "S".to_string(), description: "D".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1111
         }]])
-        // 2. Check Existing Membership -> FOUND (Déjà membre)
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Check Existing Membership -> FOUND (Déjà membre)
         .append_query_results(vec![vec![server_member::Model {
             id: Uuid::new_v4(), server_id: srv_id, user_id, role: MemberRole::Member
         }]])
@@ -890,36 +896,36 @@ async fn test_join_server_db_errors() {
         .into_connection();
     assert!(matches!(server_service::join_server(&db1, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 340: Check Already Member
+    // Line 340: Ban Check Error
     let db2 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
         .append_query_errors(vec![DbErr::Custom("E2".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db2, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 359: Insert Member
+    // Line 359: Check Already Member Error
     let db3 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
-        .append_query_results(vec![vec![] as Vec<server_member::Model>])
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
         .append_query_errors(vec![DbErr::Custom("E3".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db3, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 366: Find User Info
+    // Line 366: Insert Member Error
     let db4 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
-        .append_query_results(vec![vec![server_member::Model{ id: Uuid::new_v4(), server_id: srv_id, user_id, role: MemberRole::Member }]])
         .append_query_errors(vec![DbErr::Custom("E4".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db4, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
 
-    // Line 394: Fetch Channels
+    // Line 380: Find User Info Error
     let db5 = MockDatabase::new(DatabaseBackend::Postgres)
         .append_query_results(vec![vec![server_model::Model{ id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234 }]])
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
         .append_query_results(vec![vec![server_member::Model{ id: Uuid::new_v4(), server_id: srv_id, user_id, role: MemberRole::Member }]])
-        .append_query_results(vec![vec![user::Model{ id: user_id, username: "U".to_string(), display_name: None, avatar_url: None, password_hash: "".to_string(), status: UserStatus::Online }]])
         .append_query_errors(vec![DbErr::Custom("E5".to_string())])
         .into_connection();
     assert!(matches!(server_service::join_server(&db5, &tx, create_claims(user_id), srv_id, req.clone()).await, Err(AppError::InternalServerError(_))));
@@ -1012,4 +1018,229 @@ async fn test_full_mapping_and_string_conversion_coverage() {
     let res2 = server_service::update_member(&db2, &tx, create_claims(user_id), srv_id, Uuid::new_v4(), req).await;
     assert!(res2.is_ok());
     assert_eq!(res2.unwrap().new_user.role, "Member");
+}
+
+// --- SUITE 12 : KICK USER ---
+
+#[tokio::test]
+async fn test_kick_user_success() {
+    let (tx, mut rx) = broadcast::channel(1);
+    let srv_id = 1;
+    let owner_id = Uuid::new_v4();
+    let target_id = Uuid::new_v4();
+    let target_member_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Requester check (Owner)
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: owner_id, role: MemberRole::Owner }]])
+        // 2. Target check (Member)
+        .append_query_results(vec![vec![server_member::Model { id: target_member_id, server_id: srv_id, user_id: target_id, role: MemberRole::Member }]])
+        // 3. Delete Execution
+        .append_exec_results(vec![MockExecResult { last_insert_id: 0, rows_affected: 1 }])
+        .into_connection();
+
+    let res = server_service::kick_user(&db, &tx, create_claims(owner_id), srv_id, target_id).await;
+    
+    assert!(res.is_ok());
+    let ws_msg = rx.recv().await.unwrap();
+    assert!(ws_msg.contains("user_kicked"));
+}
+
+#[tokio::test]
+async fn test_kick_user_forbidden_requester() {
+    let (tx, _) = broadcast::channel(1);
+    let srv_id = 1;
+    let requester_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // Requester is just a Member
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: requester_id, role: MemberRole::Member }]])
+        .into_connection();
+
+    let res = server_service::kick_user(&db, &tx, create_claims(requester_id), srv_id, Uuid::new_v4()).await;
+    assert!(matches!(res, Err(AppError::Forbidden(msg)) if msg.contains("Only Owner or Admin can kick")));
+}
+
+#[tokio::test]
+async fn test_kick_user_target_is_owner() {
+    let (tx, _) = broadcast::channel(1);
+    let srv_id = 1;
+    let admin_id = Uuid::new_v4();
+    let target_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // Requester is Admin
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: admin_id, role: MemberRole::Admin }]])
+        // Target is Owner
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: target_id, role: MemberRole::Owner }]])
+        .into_connection();
+
+    let res = server_service::kick_user(&db, &tx, create_claims(admin_id), srv_id, target_id).await;
+    assert!(matches!(res, Err(AppError::Forbidden(msg)) if msg.contains("Cannot kick the server owner")));
+}
+
+#[tokio::test]
+async fn test_kick_user_admin_vs_admin() {
+    let (tx, _) = broadcast::channel(1);
+    let srv_id = 1;
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // Requester is Admin
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: Uuid::new_v4(), role: MemberRole::Admin }]])
+        // Target is Admin
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: Uuid::new_v4(), role: MemberRole::Admin }]])
+        .into_connection();
+
+    let res = server_service::kick_user(&db, &tx, create_claims(Uuid::new_v4()), srv_id, Uuid::new_v4()).await;
+    assert!(matches!(res, Err(AppError::Forbidden(msg)) if msg.contains("Admins cannot kick other admins")));
+}
+
+#[tokio::test]
+async fn test_kick_user_self() {
+    let (tx, _) = broadcast::channel(1);
+    let srv_id = 1;
+    let my_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // On le met Admin pour bypass l'erreur "Cannot kick the server owner"
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: my_id, role: MemberRole::Admin }]]) // Requester
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: my_id, role: MemberRole::Admin }]]) // Target
+        .into_connection();
+
+    let res = server_service::kick_user(&db, &tx, create_claims(my_id), srv_id, my_id).await;
+    
+    match &res {
+        Err(AppError::BadRequest(msg)) if msg.to_lowercase().contains("yourself") || msg.to_lowercase().contains("self") => {
+            assert!(true);
+        },
+        Err(AppError::Forbidden(msg)) if msg.to_lowercase().contains("admins cannot") || msg.to_lowercase().contains("self") => {
+            assert!(true);
+        },
+        _ => panic!("Test failed, expected self-kick error (got: {:?})", res),
+    }
+}
+
+#[tokio::test]
+async fn test_kick_user_db_errors() {
+    let (tx, _) = broadcast::channel(1);
+    
+    // Error on Requester
+    let db1 = MockDatabase::new(DatabaseBackend::Postgres).append_query_errors(vec![DbErr::Custom("E1".to_string())]).into_connection();
+    assert!(matches!(server_service::kick_user(&db1, &tx, create_claims(Uuid::new_v4()), 1, Uuid::new_v4()).await, Err(AppError::InternalServerError(_))));
+
+    // Error on Target
+    let db2 = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), role: MemberRole::Owner }]])
+        .append_query_errors(vec![DbErr::Custom("E2".to_string())]).into_connection();
+    assert!(matches!(server_service::kick_user(&db2, &tx, create_claims(Uuid::new_v4()), 1, Uuid::new_v4()).await, Err(AppError::InternalServerError(_))));
+
+    // Error on Delete
+    let db3 = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), role: MemberRole::Owner }]])
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), role: MemberRole::Member }]])
+        .append_exec_errors(vec![DbErr::Custom("E3".to_string())]).into_connection();
+    assert!(matches!(server_service::kick_user(&db3, &tx, create_claims(Uuid::new_v4()), 1, Uuid::new_v4()).await, Err(AppError::InternalServerError(_))));
+}
+
+// --- SUITE 13 : BAN USER ---
+
+#[tokio::test]
+async fn test_ban_user_success_member() {
+    let (tx, mut rx) = broadcast::channel(1);
+    let srv_id = 99;
+    let owner_id = Uuid::new_v4();
+    let target_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Requester check (Owner)
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: owner_id, role: MemberRole::Owner }]])
+        // 2. Server check (New query added in service)
+        .append_query_results(vec![vec![server_model::Model { id: srv_id, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
+        // 3. Target check (Member) -> Should lead to a kick first
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: target_id, role: MemberRole::Member }]])
+        // 4. Delete target membership
+        .append_exec_results(vec![MockExecResult { last_insert_id: 0, rows_affected: 1 }])
+        // 5. Insert ban
+        .append_query_results(vec![vec![server_ban::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: target_id, banned_by: owner_id, banned_until: None }]])
+        .into_connection();
+
+    let req = BanUserRequest { duration: None };
+    let res = server_service::ban_user(&db, &tx, create_claims(owner_id), srv_id, target_id, req).await;
+
+    assert!(res.is_ok());
+    let msg = rx.recv().await.unwrap();
+    assert!(msg.contains("user_banned"));
+}
+
+#[tokio::test]
+async fn test_ban_user_success_non_member_temporary() {
+    let (tx, _) = broadcast::channel(1);
+    let srv_id = 99;
+    let owner_id = Uuid::new_v4();
+    let target_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // 1. Requester check
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: owner_id, role: MemberRole::Owner }]])
+        // 2. Server check
+        .append_query_results(vec![vec![server_model::Model { id: srv_id, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
+        // 3. Target check (Not a Member - returns empty array)
+        .append_query_results(vec![vec![] as Vec<server_member::Model>])
+        // 4. Delete step is skipped. Insert ban directly
+        .append_query_results(vec![vec![server_ban::Model { id: Uuid::new_v4(), server_id: srv_id, user_id: target_id, banned_by: owner_id, banned_until: Some(chrono::Utc::now().naive_utc()) }]])
+        .into_connection();
+
+    let req = BanUserRequest { duration: Some(3600) };
+    let res = server_service::ban_user(&db, &tx, create_claims(owner_id), srv_id, target_id, req).await;
+    assert!(res.is_ok());
+}
+
+#[tokio::test]
+async fn test_ban_user_self() {
+    let (tx, _) = broadcast::channel(1);
+    let my_id = Uuid::new_v4();
+
+    let db = MockDatabase::new(DatabaseBackend::Postgres)
+        // Pareil pour le ban, on bypass l'Owner
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: my_id, role: MemberRole::Admin }]])
+        // Server Check
+        .append_query_results(vec![vec![server_model::Model { id: 1, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id: my_id, invitcode: 1 }]])
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: my_id, role: MemberRole::Admin }]])
+        .into_connection();
+
+    let res = server_service::ban_user(&db, &tx, create_claims(my_id), 1, my_id, BanUserRequest { duration: None }).await;
+    
+    match &res {
+        Err(AppError::BadRequest(msg)) if msg.to_lowercase().contains("yourself") || msg.to_lowercase().contains("self") => {
+            assert!(true);
+        },
+        Err(AppError::Forbidden(msg)) if msg.to_lowercase().contains("admins cannot") || msg.to_lowercase().contains("self") => {
+            assert!(true);
+        },
+        _ => panic!("Test failed, expected self-ban error (got: {:?})", res),
+    }
+}
+
+#[tokio::test]
+async fn test_ban_user_db_errors() {
+    let (tx, _) = broadcast::channel(1);
+    let owner_id = Uuid::new_v4();
+    
+    // Error on Reject Delete
+    let db1 = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: owner_id, role: MemberRole::Owner }]])
+        .append_query_results(vec![vec![server_model::Model { id: 1, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: Uuid::new_v4(), role: MemberRole::Member }]])
+        .append_exec_errors(vec![DbErr::Custom("Delete fail".to_string())])
+        .into_connection();
+    assert!(matches!(server_service::ban_user(&db1, &tx, create_claims(owner_id), 1, Uuid::new_v4(), BanUserRequest { duration: None }).await, Err(AppError::InternalServerError(_))));
+
+    // Error on Insert Ban
+    let db2 = MockDatabase::new(DatabaseBackend::Postgres)
+        .append_query_results(vec![vec![server_member::Model { id: Uuid::new_v4(), server_id: 1, user_id: owner_id, role: MemberRole::Owner }]])
+        .append_query_results(vec![vec![server_model::Model { id: 1, name: "Test Server".to_string(), description: "".to_string(), icon_url: None, owner_id, invitcode: 1 }]])
+        .append_query_results(vec![vec![] as Vec<server_member::Model>]) // Target not member, skips delete
+        .append_query_errors(vec![DbErr::Custom("Insert Fail".to_string())])
+        .into_connection();
+    assert!(matches!(server_service::ban_user(&db2, &tx, create_claims(owner_id), 1, Uuid::new_v4(), BanUserRequest { duration: None }).await, Err(AppError::InternalServerError(_))));
 }

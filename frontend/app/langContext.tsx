@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
 import { translations, Lang } from "../lib/i18n";
 
 interface LangState {
@@ -13,12 +13,15 @@ const LangContext = createContext<LangState | undefined>(undefined);
 
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>("fr");
+  const [mounted, setMounted] = useState(false);
 
+  // Initialiser la langue depuis localStorage uniquement côté client
   useEffect(() => {
     const stored = localStorage.getItem("lang") as Lang | null;
     if (stored === "en" || stored === "fr") {
       setLang(stored);
     }
+    setMounted(true);
   }, []);
 
   const toggleLang = () => {
@@ -29,10 +32,21 @@ export function LangProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const t = translations[lang];
+  // Mémoriser la traduction et la valeur du contexte
+  const t = useMemo(() => translations[lang], [lang]);
+  const value = useMemo(() => ({ lang, t, toggleLang }), [lang, t, toggleLang]);
+
+  // Éviter le flash lors de l'hydratation
+  if (!mounted) {
+    return (
+      <LangContext.Provider value={{ lang: "fr", t: translations.fr, toggleLang }}>
+        {children}
+      </LangContext.Provider>
+    );
+  }
 
   return (
-    <LangContext.Provider value={{ lang, t, toggleLang }}>
+    <LangContext.Provider value={value}>
       {children}
     </LangContext.Provider>
   );

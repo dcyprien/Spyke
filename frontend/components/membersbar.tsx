@@ -5,6 +5,16 @@ import Image from "next/image";
 import { useAuth } from "../app/context";
 import { useLang } from "../app/langContext";
 
+// Helper function to construct full avatar URL
+const getAvatarUrl = (avatarUrl?: string): string => {
+  if (!avatarUrl) return "/default-avatar.png";
+  if (avatarUrl.startsWith("http")) return avatarUrl;
+  if (avatarUrl.startsWith("/uploads")) {
+    return `${process.env.NEXT_PUBLIC_API_URL}${avatarUrl}`;
+  }
+  return avatarUrl;
+};
+
 // Types
 interface MemberItem {
   id: string; 
@@ -27,10 +37,12 @@ interface Props {
   userStatus?: string;
   selectedChannel?: any;
   mobileTab?: string;
-  onStartDM?: (userId: string, username: string) => void; // <-- AJOUT ICI
+  onStartDM?: (userId: string, username: string) => void;
+  showOnTablet?: boolean;
+  onTabletClose?: () => void;
 }
 
-export default function MembersBar({ selectedServer, userStatus, selectedChannel, mobileTab, onStartDM }: Props) {
+export default function MembersBar({ selectedServer, userStatus, selectedChannel, mobileTab, onStartDM, showOnTablet = false, onTabletClose }: Props) {
   const { user, servers, refreshUserData } = useAuth();
   const { t } = useLang();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -195,11 +207,13 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
   return (
     <>
       <div className={`
-        fixed right-0 bg-[#001839] border-l border-[#3D3D3D] flex-col p-4 z-10 shadow-lg
+        fixed right-0 bg-[#001839] border-l border-[#3D3D3D] flex-col p-4 z-30 shadow-lg
         top-16 w-full h-[calc(100vh-8rem)]
         md:w-64 md:h-[calc(100vh-4rem)]
+        xl:w-64 xl:h-[calc(100vh-4rem)]
         ${mobileTab === "members" ? "flex" : "hidden"}
-        md:flex
+        ${showOnTablet ? "md:flex lg:flex" : "md:hidden lg:hidden"}
+        xl:flex
       `}>
 
       {/* Modal ban temporaire */}
@@ -242,8 +256,20 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
           <button onClick={() => setActionError("")} className="ml-2 font-bold">✕</button>
         </div>
       )}
-      <h2 className="text-gray-300 text-xs font-bold uppercase mb-4 flex items-center gap-2 tracking-wider">
-        {t.members_title} — {filteredMembers.length}
+      <h2 className="text-gray-300 text-xs font-bold uppercase mb-4 flex items-center justify-between gap-2 tracking-wider">
+        <span className="flex items-center gap-2">
+          {t.members_title} — {filteredMembers.length}
+        </span>
+        {/* Bouton fermeture en md/lg uniquement */}
+        {showOnTablet && onTabletClose && (
+          <button
+            onClick={onTabletClose}
+            className="md:flex lg:flex xl:hidden p-1 hover:bg-white/10 rounded transition"
+            title="Fermer"
+          >
+            ✕
+          </button>
+        )}
       </h2>
 
       <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-gray-700">
@@ -266,13 +292,13 @@ export default function MembersBar({ selectedServer, userStatus, selectedChannel
                 onMouseLeave={() => setOpenMenuId(null)}
               >
                 <div className="relative flex-shrink-0">
-                  <Image 
-                    src={member.avatar_url || user?.avatar_url || "/default-avatar.png"} 
-                    alt={member.username} 
-                    width={32} height={32} 
-                    className="rounded-full bg-gray-700" 
+                  <Image
+                    src={getAvatarUrl(member.avatar_url)}
+                    alt={member.username}
+                    width={32} height={32}
+                    className="rounded-full object-cover"
                   />
-                <div 
+                <div
                     className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#11111b]"
                     style={{ backgroundColor: statusHex }}
                   />

@@ -6,7 +6,7 @@ use axum::{
 };
 use backend::{
     application::dto::{server_dto::CreateServerRequest, token_dto::Claims},
-    domain::models::{server_model, server_member, channel, user},
+    domain::models::{server_ban, server_model, server_member, channel, user},
     domain::models::server_member::MemberRole,
     AppState,
     infrastructure::api::handlers::server,
@@ -180,7 +180,7 @@ async fn test_get_server_by_id_forbidden() {
         .unwrap();
 
     let res = app.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::NOT_FOUND); // Ou FORBIDDEN selon votre implémentation du service
+    assert_eq!(res.status(), StatusCode::FORBIDDEN); // Ou FORBIDDEN selon votre implémentation du service
 }
 
 // --- TEST JOIN SERVER ---
@@ -195,9 +195,11 @@ async fn test_join_server_success() {
         .append_query_results(vec![vec![server_model::Model {
             id: srv_id, name: "JoinMe".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234
         }]])
-        // 2. Check Member -> Vide
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Check Member -> Vide
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
-        // 3. Insert Member
+        // 4. Insert Member
         .append_query_results(vec![vec![server_member::Model {
             id: Uuid::new_v4(), server_id: srv_id, user_id, role: MemberRole::Member
         }]])
@@ -513,7 +515,9 @@ async fn test_join_server_invalid_code() {
         .append_query_results(vec![vec![server_model::Model {
             id: srv_id, name: "S".to_string(), description: "".to_string(), icon_url: None, owner_id: Uuid::new_v4(), invitcode: 1234
         }]])
-        // 2. Not member
+        // 2. Ban Check (Not Banned)
+        .append_query_results(vec![vec![] as Vec<server_ban::Model>])
+        // 3. Not member
         .append_query_results(vec![vec![] as Vec<server_member::Model>])
         .into_connection();
 
@@ -556,5 +560,5 @@ async fn test_create_channel_no_permission() {
     let res = app.oneshot(req).await.unwrap();
     // Le handler error catch AppError::Forbidden et peut renvoyer BAD_REQUEST
     // Vérifiez si votre handler renvoie 400 ou 403. Ici je suppose 400 vu votre code précédent.
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST); 
+    assert_eq!(res.status(), StatusCode::FORBIDDEN); 
 }
