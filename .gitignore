@@ -7,7 +7,6 @@
 *.rs.bk
 *.rlib
 *.rmeta
-
 # Ignorer les fichiers temporaires
 *.tmp
 *.swp
