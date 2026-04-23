@@ -7,7 +7,6 @@
 *.rs.bk
 *.rlib
 *.rmeta
-*.lock
 
 # Ignorer les fichiers temporaires
 *.tmp
