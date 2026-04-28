@@ -50,7 +50,7 @@ jobs:
 
   build-tauri:
     name: Build Tauri App
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master'
     needs: test-backend
     
     permissions:
